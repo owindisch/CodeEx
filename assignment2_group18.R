@@ -25,7 +25,7 @@ desc         # description of the variables
 # Which "strange values" are there? Look at all values below -100 million
 # (no real estimate can be that negative). We only look at the numeric columns.
 num_acs <- acs %>% select(where(is.numeric))   # numeric columns only (not state/county names)
-unique(num_acs[num_acs < -100000000])          # which values: only -666666666
+unique(na.omit(num_acs[num_acs < -100000000])) # which values: only -666666666
 sum(num_acs < -100000000, na.rm = TRUE)        # how many: 358
 colSums(num_acs == -666666666, na.rm = TRUE)   # in which variables? (the medians, gini, hh_size)
 
