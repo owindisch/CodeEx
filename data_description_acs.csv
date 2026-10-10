@@ -1,0 +1,41 @@
+variable,description,unit,note
+geoid,11-digit census tract code: state (2) + county (3) + tract (6); read as text,code,
+state,State name,text,
+county,County name,text,
+workers,"Number of workers aged 16+ (denominator of pct_wfh); use for cleaning and weighting, not as predictor",count,
+pct_wfh,Workers aged 16+ who worked from home,% of workers 16+,
+pop,Total population,count,
+med_age,Median age,years,may contain special codes
+pct_under18,Population under 18,% of population,
+pct_65plus,Population aged 65 or older,% of population,
+hh_size,Average household size,persons,may contain special codes
+pct_foreign,Population born outside the US,% of population,
+pct_lt_hs,Population 25+ without a high school diploma,% of population 25+,
+pct_hs,Population 25+ with high school diploma or equivalent as highest level,% of population 25+,
+pct_some_college,Population 25+ with some college or an associate's degree as highest level,% of population 25+,
+pct_bachelor_plus,Population 25+ with a bachelor's degree or higher,% of population 25+,
+occ_mgmt_sci,"Employed 16+ in management, business, science and arts occupations",% of employed 16+,
+occ_service,Employed 16+ in service occupations,% of employed 16+,
+occ_sales_office,Employed 16+ in sales and office occupations,% of employed 16+,
+occ_constr_maint,"Employed 16+ in natural resources, construction and maintenance occupations",% of employed 16+,
+occ_production,"Employed 16+ in production, transportation and material moving occupations",% of employed 16+,
+lfp_rate,Population 16+ in the labour force,% of population 16+,
+unemp_rate,Unemployed in the civilian labour force,% of civilian labour force,
+med_hh_income,Median household income,US dollars,may contain special codes
+gini,Gini index of household income inequality,index (0-1),may contain special codes
+pct_poverty,Population below the poverty level,% of population,
+pct_snap,Households receiving food stamps (SNAP),% of households,
+pct_broadband,Households with a broadband internet subscription,% of households,
+pct_drive_alone,Commuters (workers 16+ not working from home) who drive to work alone,% of commuters,
+pct_transit,Commuters (workers 16+ not working from home) who use public transportation,% of commuters,
+mean_commute,Average travel time to work of commuters,minutes,
+pct_no_vehicle,Occupied housing units without a vehicle available,% of occupied units,
+pct_owner,Occupied housing units that are owner-occupied,% of occupied units,
+pct_vacant,Housing units that are vacant,% of housing units,
+pct_detached,Housing units that are single-family detached houses,% of housing units,
+pct_large_bldg,Housing units in buildings with 20 or more units,% of housing units,
+pct_mobile,Housing units that are mobile homes,% of housing units,
+med_rooms,Median number of rooms per housing unit,rooms,may contain special codes
+med_year_built,Median year in which the structures were built,year,may contain special codes
+med_rent,Median gross rent,US dollars per month,may contain special codes
+med_value,Median value of owner-occupied housing units,US dollars,may contain special codes

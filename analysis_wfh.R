@@ -27,9 +27,8 @@ rm(list = ls())
 #  File Location.)
 # setwd("C:/Users/yourname/Documents/assignment2")
 
-# The names of the two data files. Replace "x" by your group number/letter
-# if your file is called differently (look in your folder).
-data_file        <- "a2_data_group_x.csv"
+# The names of the two data files (group 18 = Massachusetts).
+data_file        <- "a2_data_group_18.csv"
 description_file <- "data_description_acs.csv"
 
 # Create a folder for the figures. showWarnings = FALSE means: do not
@@ -45,7 +44,10 @@ dir.create("figures", showWarnings = FALSE)
 
 # read.csv() reads a comma-separated file into a "data frame" (a table:
 # rows = census tracts, columns = variables). We store it under the name "df".
-df <- read.csv(data_file)
+# colClasses = c(geoid = "character") tells R to read the tract code as TEXT,
+# as the description file says. Otherwise R would treat it as a number
+# (and, for states with a leading 0 such as Alabama "01", drop that 0).
+df <- read.csv(data_file, colClasses = c(geoid = "character"))
 
 # The description file tells us what each variable means.
 desc <- read.csv(description_file)
@@ -111,35 +113,51 @@ colSums(is.na(df))
 
 # ---- 1d. Tracts without (or with very few) inhabitants ----------------------
 
-# !!! Check names(df) and the description file: the variable with the total
-# population may be called differently in your file. Change it here if needed.
-pop_var <- "total_pop"
+# The total population is in the column "pop" (see the description file).
+# NOTE: the description file also lists "workers", but that column is NOT in
+# our data file (check with: "workers" %in% names(df)). So we use "pop".
+pop_var <- "pop"
+"workers" %in% names(df)
 
 summary(df[[pop_var]])
 
-# How many tracts have 0 inhabitants, and how many fewer than 100 / 500?
-sum(df[[pop_var]] == 0,   na.rm = TRUE)
-sum(df[[pop_var]] < 100,  na.rm = TRUE)
-sum(df[[pop_var]] < 500,  na.rm = TRUE)
+# How many tracts have 0 inhabitants, and how many fewer than 100 / 300 / 1200?
+# (1,200 is the lower bound of the Census Bureau's guideline for tract size.)
+sum(df[[pop_var]] == 0,    na.rm = TRUE)
+sum(df[[pop_var]] < 100,   na.rm = TRUE)
+sum(df[[pop_var]] < 300,   na.rm = TRUE)
+sum(df[[pop_var]] < 1200,  na.rm = TRUE)
+
+# Show the smallest tracts. order() gives the row numbers sorted from small
+# to large population; we look at the 30 smallest.
+small <- df[order(df[[pop_var]]), ]
+head(small[, c("geoid", "county", "pop", "pct_wfh", "med_hh_income")], 30)
+
+# The last 6 digits of geoid are the tract code. substr(text, 6, 7) takes
+# characters 6 and 7 = the first two digits of the tract code. Codes 98xx are
+# "special land-use" tracts (parks, airports, ...), codes 99xx are water-only.
+df$tract_prefix <- substr(df$geoid, 6, 7)
+table(df$tract_prefix[df[[pop_var]] < 300])
 
 # Histogram of population, with a vertical line at our cut-off.
 png("figures/hist_population.png", width = 800, height = 600)
 hist(df[[pop_var]], breaks = 100,
      main = "Population per census tract",
      xlab = "Number of inhabitants", ylab = "Number of tracts")
-abline(v = 100, col = "red", lwd = 2)     # red line at 100 inhabitants
-dev.off()                                  # close (= save) the png file
+abline(v = 300, col = "red", lwd = 2)     # red line at 300 inhabitants
+invisible(dev.off())                       # close (= save) the png file
 
 # Our decision (explain this in your report):
 #  * Tracts with 0 inhabitants (water areas, parks, airports, ...) have no
 #    workers, so pct_wfh cannot be computed: they are not neighbourhoods
 #    the company serves with residential electricity.
-#  * Tracts with very few inhabitants (often prisons, military bases,
-#    university dorms, industrial zones) rest on only a handful of survey
-#    responses, so their percentages are extremely noisy (e.g. 1 of 3
-#    workers = 33% WFH). We drop tracts with fewer than 100 inhabitants.
+#  * Tracts with very few inhabitants (here: Logan airport, harbour islands,
+#    parks - all with tract codes 98xx/99xx) rest on only a handful of survey
+#    responses, so their percentages are extremely noisy (pct_wfh is 0% or
+#    100% in several of them). There is a clear gap in the data between 202
+#    and 453 inhabitants, so we drop tracts with fewer than 300 inhabitants.
 #  * Tracts where the dependent variable pct_wfh is missing cannot be used.
-min_pop <- 100
+min_pop <- 300
 
 # Keep only rows that satisfy all conditions. "&" means AND, "!" means NOT.
 keep <- !is.na(df[[pop_var]]) & df[[pop_var]] >= min_pop & !is.na(df$pct_wfh)
@@ -174,7 +192,7 @@ hist(df$med_hh_income, breaks = 100,
      ylab = "Number of tracts")
 
 par(mfrow = c(1, 1))        # back to one plot per figure
-dev.off()
+invisible(dev.off())   # close (= save) the png file
 
 # ---- 2b. Do several tracts share exactly the same maximum value? ------------
 
@@ -205,6 +223,19 @@ head(sort(table(df$med_hh_income), decreasing = TRUE), 5)
 # A linear slope estimated on these data would be biased (usually too flat)
 # at the top, and we cannot tell apart a $2.1m and a $5m neighbourhood.
 #
+# The same problem exists for other medians in the data. Let us check every
+# "med_" variable: how many tracts sit exactly at the max and at the min?
+for (v in c("med_age", "med_rooms", "med_year_built", "med_rent",
+            "med_value", "med_hh_income")) {
+  cat(v, ": max =", max(df[[v]], na.rm = TRUE),
+      "(", sum(df[[v]] == max(df[[v]], na.rm = TRUE), na.rm = TRUE), "tracts )",
+      " min =", min(df[[v]], na.rm = TRUE),
+      "(", sum(df[[v]] == min(df[[v]], na.rm = TRUE), na.rm = TRUE), "tracts )\n")
+}
+# -> med_rent is top-coded at 3501 ("3,500+") and med_year_built is
+#    bottom-coded at 1938 / "1939 or earlier": a huge group in old
+#    Massachusetts towns. We flag those too.
+
 # Our choice: KEEP the tracts (they are real, often high-WFH neighbourhoods;
 # dropping them would remove exactly the interesting tail), keep the
 # top-coded value, and ADD a dummy (0/1) variable that equals 1 for
@@ -218,6 +249,11 @@ df$topcode_income <- as.numeric(df$med_hh_income >= 250001)
 
 table(df$topcode_value,  useNA = "ifany")   # how many 0's, 1's and NA's
 table(df$topcode_income, useNA = "ifany")
+
+df$topcode_rent     <- as.numeric(df$med_rent >= 3501)
+df$built_pre1939    <- as.numeric(df$med_year_built <= 1938)
+table(df$topcode_rent,  useNA = "ifany")
+table(df$built_pre1939, useNA = "ifany")
 
 df$log_med_value     <- log(df$med_value)
 df$log_med_hh_income <- log(df$med_hh_income)
@@ -234,7 +270,11 @@ num_cols <- names(df)[sapply(df, is.numeric)]
 x_vars   <- setdiff(num_cols, "pct_wfh")
 # If your data has ID columns (e.g. GEOID, state, county, tract), remove them,
 # because a correlation with an ID number is meaningless:
-x_vars   <- setdiff(x_vars, c("GEOID", "geoid", "state", "county", "tract"))
+# (geoid, state and county were read as text, so they are not in num_cols.)
+# We also leave out our own 0/1 flags; they are not real neighbourhood
+# characteristics.
+x_vars   <- setdiff(x_vars, c("topcode_value", "topcode_income",
+                              "topcode_rent", "built_pre1939"))
 
 # For each variable compute the correlation with pct_wfh.
 # use = "complete.obs": only use tracts where both values are not NA.
@@ -262,7 +302,7 @@ write.csv(cor_table, "figures/correlations_with_pct_wfh.csv", row.names = FALSE)
 png("figures/hist_pct_wfh.png", width = 800, height = 600)
 hist(df$pct_wfh, breaks = 60, main = "Share of workers working from home",
      xlab = "pct_wfh (%)", ylab = "Number of tracts")
-dev.off()
+invisible(dev.off())   # close (= save) the png file
 
 # ---- 3c. Scatter plots ------------------------------------------------------
 
@@ -282,14 +322,15 @@ scatter_wfh <- function(v) {
 # Main text: a selection of 4 variables, chosen from the theory (education,
 # income, occupation, commuting). !!! Replace them by the exact names in
 # your data if they differ.
-main_vars <- c("log_med_hh_income", "pct_bachelor", "pct_mgmt_occ", "mean_travel_time")
+main_vars <- c("pct_bachelor_plus", "occ_mgmt_sci", "log_med_hh_income",
+               "occ_production", "pct_broadband", "mean_commute")
 main_vars <- intersect(main_vars, names(df))   # keep only names that exist
 
-png("figures/scatter_main.png", width = 1200, height = 1000)
-par(mfrow = c(2, 2))
+png("figures/scatter_main.png", width = 1500, height = 1000)
+par(mfrow = c(2, 3))
 for (v in main_vars) scatter_wfh(v)
 par(mfrow = c(1, 1))
-dev.off()
+invisible(dev.off())   # close (= save) the png file
 
 # Appendix: ALL independent variables, 9 plots (3 x 3) per figure.
 # seq(1, n, by = 9) gives the start positions 1, 10, 19, ...
@@ -300,7 +341,7 @@ for (i in seq_along(starts)) {
   par(mfrow = c(3, 3))
   for (v in vars_page) scatter_wfh(v)
   par(mfrow = c(1, 1))
-  dev.off()
+  invisible(dev.off())   # close (= save) the png file
 }
 
 
@@ -318,7 +359,6 @@ for (i in seq_along(starts)) {
 
 # We can show this with the real data. Convert the commuter share into a
 # share of all workers:  share_all = share_commuters * (100 - pct_wfh) / 100
-# !!! Change the variable name if needed.
 drive_var <- "pct_drive_alone"
 
 if (drive_var %in% names(df)) {
@@ -339,5 +379,5 @@ if (drive_var %in% names(df)) {
        xlab = "Drive alone (% of all workers)", ylab = "pct_wfh (%)",
        main = "As share of all workers (mechanical)")
   par(mfrow = c(1, 1))
-  dev.off()
+  invisible(dev.off())   # close (= save) the png file
 }
