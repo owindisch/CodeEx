@@ -1,7 +1,7 @@
 # Assignment 2: Working from home in Massachusetts census tracts (group 18)
 
 **Data:** `a2_data_group_18.csv`: ACS 5-year estimates 2020–2024, 1,620 census tracts, all in Massachusetts.
-**Code:** `analysis_wfh.R`. Every line has a beginner-level comment. Run it in RStudio line by line (Ctrl+Enter).
+**Code:** `analysis_wfh.R` (tidyverse + ggplot2; install once with `install.packages("tidyverse")`). Every step has a beginner-level comment, including how the pipe `|>` and ggplot's `+` layers work. Run it in RStudio line by line (Ctrl+Enter).
 All numbers below were produced by that script. The full console output is in `figures_log.txt`, and the figures are in `figures/`.
 
 ### Sources (U.S. Census Bureau)
@@ -27,12 +27,12 @@ All numbers below were produced by that script. The full console output is in `f
 
 | Step | R code | What it does |
 |---|---|---|
-| Load | `read.csv(data_file, colClasses = c(geoid = "character"))` | Reads the table. `geoid` is kept as text (the description file asks for this). |
-| Inspect | `dim()`, `names()`, `str()`, `summary()` | Size, variable names, types and ranges. |
-| Find codes | `sapply(df[num_cols], function(x) sum(x < -100000000, na.rm = TRUE))` | Counts, per column, the values below −100 million. No real estimate can be that negative. |
-| Replace | `for (col in num_cols) { ... df[[col]][is_code] <- NA }` | Turns each code into `NA` (missing). |
-| Small tracts | `sum(df$pop == 0)`, `head(df[order(df$pop), ], 30)` | Counts and lists the smallest tracts. |
-| Filter | `df <- df[keep, ]` | Keeps tracts with ≥ 300 inhabitants and a non-missing `pct_wfh`. |
+| Load | `read_csv(data_file, col_types = cols(geoid = col_character()))` | Reads the table. `geoid` is kept as text (the description file asks for this). |
+| Inspect | `dim()`, `glimpse()`, `summary()` | Size, variable names, types and ranges. |
+| Find codes | `df \|> summarise(across(where(is.numeric), ~ sum(.x < -1e8, na.rm = TRUE)))` | Counts, per column, the values below −100 million. No real estimate can be that negative. |
+| Replace | `df \|> mutate(across(where(is.numeric), ~ if_else(.x < -1e8, NA, .x)))` | Turns each code into `NA` (missing). |
+| Small tracts | `df \|> arrange(pop) \|> head(30)` | Lists the smallest tracts. `str_sub(geoid, 6, 7)` shows the tract-code prefix (98/99). |
+| Filter | `df \|> filter(pop >= 300, !is.na(pct_wfh))` | Keeps tracts with ≥ 300 inhabitants and a non-missing `pct_wfh`. |
 
 ### 1.2 What we found
 
@@ -134,8 +134,9 @@ The same problem appears in other medians in our data (`for` loop in the script)
 We **keep** the top-coded tracts, keep the capped value, and add an **indicator (dummy) variable**:
 
 ```r
-df$topcode_income <- as.numeric(df$med_hh_income >= 250001)   # 1 if "250,000+"
-df$topcode_value  <- as.numeric(df$med_value     >= 2000001)  # 1 if "2,000,000+"
+df <- df |>
+  mutate(topcode_income = as.numeric(med_hh_income >= 250001),   # 1 if "250,000+"
+         topcode_value  = as.numeric(med_value     >= 2000001))  # 1 if "2,000,000+"
 ```
 
 Why:
@@ -151,8 +152,8 @@ Why:
 
 ### 3.1 What the code does
 - Histogram of `pct_wfh` (`figures/hist_pct_wfh.png`).
-- Pearson (linear) and Spearman (rank) correlations of `pct_wfh` with **all** numeric predictors, sorted (`figures/correlations_with_pct_wfh.csv`).
-- Six scatter plots for the main text (`figures/scatter_main.png`) and all variables, 9 per page, for the appendix (`figures/appendix_scatter_1.png` … `_5.png`). Red line = linear fit; blue curve = lowess smoother, which reveals non-linearity.
+- Pearson (linear) and Spearman (rank) correlations of `pct_wfh` with **all** numeric predictors, sorted (`figures/correlations_with_pct_wfh.csv`), also shown as a bar chart (`figures/correlations_bar.png`).
+- Six scatter plots for the main text (`figures/scatter_main.png`) and all variables, 9 per page, for the appendix (`figures/appendix_scatter_1.png` … `_5.png`). Red line = linear fit; blue curve = a flexible smooth curve (GAM, ggplot2's default smoother for large data), which reveals non-linearity.
 
 ### 3.2 The dependent variable
 After cleaning, `pct_wfh` ranges from **0% to 52.4%**, with a median of **17.3%** and a mean of **18.2%**. The middle 50% of tracts lie between 10.2% and 25.0%. So on average about one in five workers worked from home in the survey week, and the differences between neighbourhoods are very large: the 5th percentile is 4.2% and the 95th is 35.3%.
@@ -175,15 +176,16 @@ Weak (|r| < 0.15): age structure (`med_age`, `pct_65plus`), housing type (`pct_d
 
 ### 3.4 Discussion
 
-1. **Education and occupation dominate.** Tracts where many adults hold a bachelor's degree and where many people work in management, business, science and arts occupations have far more home workers (r ≈ 0.8). This fits the idea of *teleworkable jobs*: office and knowledge work can be done remotely, while service, production, construction and transport work cannot (all strongly negative). The scatter plots show an almost perfectly **linear** relation for education and the management/science occupation share.
-2. **Income and wealth** (income, home value, rent) are also strongly positive. The relation with income is **convex**: the lowess curve is flat at low incomes and steep at high incomes, even in logs. Part of this is probably education/occupation again, since high-income tracts are highly educated. The top-coded tracts form a vertical stripe at the right edge of the income and value plots (see Q2).
+1. **Education and occupation dominate.** Tracts where many adults hold a bachelor's degree and where many people work in management, business, science and arts occupations have far more home workers (r ≈ 0.8). This fits the idea of *teleworkable jobs*: office and knowledge work can be done remotely, while service, production, construction and transport work cannot (all strongly negative). The scatter plots show an almost **linear** relation for education and the management/science occupation share, which only flattens a little in the very highest-educated tracts (above ~85%).
+2. **Income and wealth** (income, home value, rent) are also strongly positive. The relation with income is **convex**: the smooth curve is flat at low incomes and steep at high incomes, even in logs. Part of this is probably education/occupation again, since high-income tracts are highly educated. The top-coded tracts form a vertical stripe at the right edge of the income and value plots (see Q2).
 3. **Poverty and SNAP** are negative, which is the mirror image of point 2.
-4. **Broadband** (r = 0.41) is positive and convex: WFH really only takes off when more than ~90% of households have broadband. The direction of causality is unclear. Broadband makes WFH possible, but home workers also buy broadband.
-5. **Commuting variables are weak.** `pct_transit` is mildly positive, because Boston-area tracts with good transit also have many office workers. `mean_commute` is weak (0.16) and hump-shaped: tracts with very short and very long commutes both have less WFH. These variables are measured only among *commuters*, so they need care (see Q4).
-6. **Demography and housing type matter little on their own.** Age, household size, detached houses and large buildings are only weakly correlated. They may still matter *after* controlling for education (partial effects); this needs the regression.
-7. **Pearson vs. Spearman.** They are close for most variables. Spearman is clearly stronger for skewed variables (`pct_snap`, `pct_poverty`, `pct_no_vehicle`, `med_value`), which points to non-linear but monotone relations and suggests logs or other transformations.
-8. **Strong correlation between predictors.** Education, occupation, income and home value are strongly correlated with each other (multicollinearity). Their individual regression coefficients will be imprecise, and the correlations above **must not be read as causal effects**. They show association only.
-9. **Time caveat.** The 5-year estimates pool interviews from 2020 (peak of the pandemic) to 2024 [S1, S8]. A tract's `pct_wfh` is an average over this period, so differences in the timing of interviews add noise.
+4. **Production occupations** (r = −0.64) fall steeply from 0% to ~15% and then level off at around 7–9% WFH: the relation is clearly non-linear.
+5. **Broadband** (r = 0.41) is positive and convex: WFH really only takes off when more than ~90% of households have broadband. The direction of causality is unclear. Broadband makes WFH possible, but home workers also buy broadband.
+6. **Commuting variables are weak.** `pct_transit` is mildly positive, because Boston-area tracts with good transit also have many office workers. `mean_commute` is weak (0.16) and hump-shaped: tracts with very short and very long commutes both have less WFH. These variables are measured only among *commuters*, so they need care (see Q4).
+7. **Demography and housing type matter little on their own.** Age, household size, detached houses and large buildings are only weakly correlated. They may still matter *after* controlling for education (partial effects); this needs the regression.
+8. **Pearson vs. Spearman.** They are close for most variables. Spearman is clearly stronger for skewed variables (`pct_snap`, `pct_poverty`, `pct_no_vehicle`, `med_value`), which points to non-linear but monotone relations and suggests logs or other transformations.
+9. **Strong correlation between predictors.** Education, occupation, income and home value are strongly correlated with each other (multicollinearity). Their individual regression coefficients will be imprecise, and the correlations above **must not be read as causal effects**. They show association only.
+10. **Time caveat.** The 5-year estimates pool interviews from 2020 (peak of the pandemic) to 2024 [S1, S8]. A tract's `pct_wfh` is an average over this period, so differences in the timing of interviews add noise.
 
 ---
 
