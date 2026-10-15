@@ -17,7 +17,8 @@ desc <- read.csv("data_description_acs_fixed.csv")   # what each variable means 
 
 ## Question 1 ----------------------------------------------
 
-dim(acs)     # how many observations and variables (rows and columns): 1620 x 39
+dim(acs)     # 1620 tracts and 39 columns: 3 identifiers (geoid, state, county),
+             # 1 dependent variable (pct_wfh) and 35 independent variables
 names(acs)   # variable names
 summary(acs) # summary stats, check where the "strange values" are
 desc         # description of the variables
@@ -126,8 +127,13 @@ cor(acs_clean$pct_wfh, acs_clean$occ_production,    use = "complete.obs") # -0.6
 cor(acs_clean$pct_wfh, acs_clean$pct_broadband,     use = "complete.obs") #  0.41
 
 # Correlation of pct_wfh with ALL numeric variables at once (for the appendix)
-num  <- acs_clean %>% select(where(is.numeric), -geoid, -topcode_value, -topcode_income) # numeric columns, without ID and dummies
+# Only pct_wfh and the 35 ORIGINAL independent variables: we leave out the ID (geoid)
+# and the variables we created ourselves in Question 2 (dummies and logs)
+num  <- acs_clean %>% select(where(is.numeric), -geoid, -topcode_value, -topcode_income,
+                             -log_value, -log_income)
 cors <- cor(num, use = "pairwise.complete.obs")[, "pct_wfh"]  # correlation of each column with pct_wfh
+cors <- cors[names(cors) != "pct_wfh"]                        # drop pct_wfh itself (always 1)
+length(cors)                                                  # 35 independent variables
 sort(round(cors, 2))                                          # sorted from negative to positive
 
 # All scatter plots in one figure for the appendix (one small panel per variable)
