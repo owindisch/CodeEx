@@ -1,96 +1,111 @@
-# R Programming for Beginners: Practice Exams
+# R Programming for Beginners: Practice Exams (FEM11151)
 
-There are three exams. Each one follows the 8-part structure of the practice exam:
+There are three exams. Each one has the same 8 parts as the practice exam, and the content follows the course reader and lecture notes:
 
-| # | Part | What you do |
-|---|------|-------------|
-| 1 | Dataset | Predict the output of operations on a `str()` printout |
-| 2 | RMarkdown | Complete the YAML header and spot the mistakes that stop rendering |
-| 3 | Plotting function | Give the function calls that produce the plots shown |
-| 4 | Writing functions | Fill in the blanks of small algorithms (`if`/`else`, indexing, `stop()`) |
-| 5 | Statistics functions + `apply()` | Write a formula as a function and apply it to a data matrix |
-| 6 | dplyr debugging + `lm()` | Find the bug behind each error message and use the model output |
-| 7 | Data vectors | Use `range()`/`min()`/`max()` on dates, factors and ordered factors |
-| 8 | Coercion | Predict the result of `typeof()` after a replacement |
+| # | Part | Where it is in the course material |
+|---|------|------------------------------|
+| 1 | Dataset outputs (`str()`, `length`, `dim`, `typeof`, `$` vs `subset`, factors) | Reader (data structures), Lecture 2 (discover) |
+| 2 | RMarkdown: YAML header and broken code chunks | Lecture 4 Reporting (YAML, knitr chunk options, inline code) |
+| 3 | Plotting function: give the calls for the plots shown, plus base graphics arguments | Lecture 4 Data visualisation (`plot`, `type`, `pch`, `col`, `lines`, `legend`, `par`) |
+| 4 | Writing functions: fill in the blanks, `return()`, loops | Reader (functions, arguments by name/position), Lecture 5 (customised functions, control structures, loops) |
+| 5 | Statistics functions, matrices and `apply()` | Reader (matrices), Lecture 2 (`var`, `sd`, `colMeans`) |
+| 6 | Debugging dplyr and base R code, and using `lm()` | Lecture 2 (`subset`, `aggregate`, `transform`, dplyr verbs, `%>%`), Reader (`lm`, `boxplot`) |
+| 7 | Data vectors: dates, factors, ordered factors | Lecture 3 (`factor`, `relevel`, `levels<-`, `as.Date`, `difftime`, `lubridate`) |
+| 8 | Coercion | Reader (data types, "upwards"/"downwards" coercion) |
+| 9 | Indexing and data.table | Lecture 5 (vector/matrix/list/data frame indexing, `which`, `order`, `%in%`), Lecture 6 (`fread`, `DT[i, j, by]`, `.N`, `.()`, `keyby`, `%like%`, `%chin%`, `%between%`) |
+| 10 | Regular expressions and web scraping | Lecture 7 (`grep`, `grepl`, `sub`, `gsub`, `strsplit`, regex classes and quantifiers, `regmatches`, `rvest`) |
 
-Solutions with explanations are in `R_practice_exams_solutions.md`. That file also contains the solutions to **the original practice exam** (Starwars, airports, `draw_curve`, medians, city temperatures, penguins, data vectors, coercion).
+Parts 1–8 follow the practice exam exactly. Parts 9 and 10 are **extra** parts for Lectures 5–7, which the practice exam does not show separately. Lecture 5 material (functions, `return()`, `if`/`else if`, loops) is also built into Part 4.
+
+Solutions are in `R_practice_exams_solutions.md`. That file also solves **the original practice exam**.
+
+> **Coercion in the reader's terminology.** The ranking is character > logical > integer > double (low → high cardinality). Coercion to character is "downwards" (`c(0.5, "a")` → `"0.5" "a"`). Coercion to double is "upwards" (`c(0.5, 1L)` → `0.5 1.0`).
 
 ---
 ---
 
 # Practice Exam 1
 
-## 1. Pokémon
+## 1. Ben & Jerry's Ice Cream
 
-The `pokemon` dataset contains all Pokémon of the first seven generations:
+The `BenAndJerry` dataset is a subsample of the Nielsen homescan panel:
 
 ```
-> str(pokemon)
-Classes 'data.table' and 'data.frame':  800 obs. of  9 variables:
- $ name      : chr  "Bulbasaur" "Ivysaur" "Venusaur" "Charmander" ...
- $ type1     : chr  "Grass" "Grass" "Grass" "Fire" ...
- $ type2     : chr  "Poison" "Poison" "Poison" NA ...
- $ hp        : int  45 60 80 39 58 78 44 59 79 45 ...
- $ attack    : int  49 62 82 52 64 84 48 63 83 30 ...
- $ defense   : int  49 63 83 43 58 78 65 80 100 35 ...
- $ speed     : int  45 60 80 65 80 100 43 58 78 45 ...
- $ generation: int  1 1 1 1 1 1 1 1 1 1 ...
- $ legendary : logi  FALSE FALSE FALSE FALSE FALSE FALSE ...
+> str(BenAndJerry)
+Classes 'tbl_df', 'tbl' and 'data.frame':  21974 obs. of 12 variables:
+ $ quantity           : int 2 1 1 1 1 2 2 1 1 1 ...
+ $ price_paid_deal    : num 6.82 3.5 3.5 0 0 0 0 2.14 3.5 3 ...
+ $ price_paid_non_deal: num 0 0 0 3 3.99 7.78 7.78 0 0 0 ...
+ $ coupon_value       : num 1 0 0 0 0 0 0 0 0 1.25 ...
+ $ promotion_type     : int 2 1 1 NA NA NA NA 1 1 2 ...
+ $ total_spent        : num 37.2 31 15.5 113 67.3 ...
+ $ size1_descr        : chr "16.0 MLOZ" "16.0 MLOZ" "16.0 MLOZ" "16.0 M"..
+ $ flavor_descr       : chr "CAKE BATTER" "VAN CARAMEL FUDGE" "VAN CARA"..
+ $ formula_descr      : chr "REGULAR" "REGULAR" "REGULAR" "REGULAR" ...
+ $ household_id       : int 2001456 2001456 2001456 2001637 2002791 2002..
+ $ female_head_birth  : chr NA NA NA "10/1/36" ...
+ $ male_head_birth    : chr "10/1/61" "10/1/61" "10/1/61" NA ...
 ```
 
 What is the output of the following data operations?
 
 ```r
 # A.)
-nrow(pokemon)
+length(BenAndJerry)
 
 # B.)
-typeof(pokemon[, "hp"])
+dim(BenAndJerry$total_spent)
 
 # C.)
-typeof(pokemon[["hp"]])
+dim(subset(BenAndJerry, select = c(quantity, total_spent)))
 
 # D.)
-levels(pokemon$type1)
+typeof(BenAndJerry$household_id)
 
 # E.)
-head(pokemon$type2, 4)
+levels(BenAndJerry$flavor_descr)
+
+# F.)
+class(BenAndJerry[, 6])
+
+# G.)
+sum(is.na(BenAndJerry$promotion_type[1:10]))
 ```
 
 ## 2. RMarkdown
 
-Complete the YAML header so that (1) the file is rendered into an **HTML** document, (2) a table of contents with all level 1 to level **3** headers is created automatically, and (3) the table of contents **floats** at the side of the page.
+Complete the YAML header so that (1) the file is rendered into a **pdf** document, (2) the sections are **numbered**, (3) all figures are **6 inches wide and 4 inches high** by default, and (4) data frames are printed as **kable** tables.
 
-The RMarkdown file also contains several mistakes, so R won't render it and gives an error message instead. Spot the mistakes in the embedded code chunks so that the document can be rendered.
+The RMarkdown file also contains several mistakes, so R won't render it and gives an error message instead. Spot the mistakes in the embedded code chunks.
 
 ````markdown
 ---
-title: "Pokémon Report"
+title: "Ben & Jerry's Report"
 author: "Eager Student"
 ---
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(data.table)
+load("BenAndJerry.RData")
 library(ggplot2)
-pokemon <- fread("pokemon.csv")
 ```
 
-# Attack vs. Defense
+# Prices
 
-```{r scatter, fig.width = 6}
-ggplot(pokemon, aes(x = attack, y = defense, colour = legendary) +
-  geom_point()
+The average amount spent is `r round(mean(BenAndJerry$total_spent), 2` dollars.
+
+```{r price-plot, fig.align = center}
+ggplot(BenAndJerry, aes(x = price_paid_deal)) +
+  geom_histogram()
 ```
 
-```{r gen-table, eval = True}
-pokemon[, .(mean_hp = mean(hp)), by = generation]
+```{r price-table, results = 'hide}
+summary(BenAndJerry$price_paid_deal)
 ```
 
-The dataset contains `r nrow(Pokemon)` Pokémon.
-
-```{r summary, echo = FALSE, message = FALSE warning = FALSE}
-summary(pokemon)
+```{r kable-table}
+kable(head(BenAndJerry)) %>%
+  kable_styling(full_width = FALSE)
 ```
 ````
 
@@ -114,11 +129,18 @@ draw_curve <- function(fun = cos, from = 0, to = 2 * pi, length.out = 50,
 }
 ```
 
-Provide the function calls that produce the following curves:
+a) Provide the function calls that produce the following curves:
 
 ![Exam 1 plots](figures/exam1_q3.png)
 
-Plot A has red vertical lines. Plot B has 50 open blue circles. Plot C has a dark-green line from 0 to 10. Plot D has 10 filled red points.
+- **Plot A:** red vertical lines.
+- **Plot B:** 50 open blue circles.
+- **Plot C:** a dark-green line from 0 to 10.
+- **Plot D:** 10 filled red points.
+
+b) Which `par()` setting arranges four plots **next to each other in one row**? How do you switch back to the default settings afterwards?
+
+c) Plot C should get the title `"Square root"` and bigger plotting symbols (twice the default size). The function has no argument for this. Which two small changes to `draw_curve()` let you pass extra arguments such as `main` or `cex` on to `plot()`?
 
 ## 4. Means
 
@@ -152,7 +174,7 @@ trim.mean(1:10, k = 3)
 # 5.5
 ```
 
-Finally, the **geometric mean** of positive numbers is `exp(mean(log(x)))`. Complete the code below so that `geo.mean()` uses your `my.mean()` and stops if any element is not positive:
+The **geometric mean** of positive numbers is `exp(mean(log(x)))`. Complete `geo.mean()` using `my.mean()`. It should stop if any element is not positive:
 
 ```r
 ___ {
@@ -164,13 +186,64 @@ geo.mean(c(1, 10, 100))
 # 10
 ```
 
+Finally, which of these calls of `trim.mean()` are valid, and what do they return?
+
+```r
+trim.mean(k = 2, x = 1:10)
+trim.mean(1:10, 2)
+trim.mean(2, 1:10)
+```
+
+
+**Lecture 5 traps.** What do these calls return?
+
+```r
+foo <- function(x){
+  return (2/5) * x
+}
+foo(10)
+
+sign <- function(x) {
+  if (x < 0) {
+    "negative"
+  } else if (x == 0) {
+    "zero"
+  } else {
+    "positive"
+  }
+}
+sign(0)
+sign(c(-1, 1))
+```
 ## 5. Exam Scores
 
-The sample standard deviation is the square root of the sample variance:
+**Matrix warm-up**
+
+```r
+a <- 1:6
+
+# A.)
+A <- matrix(a, ncol = 2)
+A
+
+# B.)
+B <- matrix(a, ncol = 2, byrow = TRUE)
+B[3, 1]
+
+# C.)
+dim(t(A))
+
+# D.)
+matrix(1:4, ncol = 3)
+```
+
+**Standard deviation and standard error**
+
+The sample standard deviation is
 
 `sd(x) = sqrt( sum((x - mean(x))^2) / (n - 1) )`
 
-Complete the code below to write a function `my.sd()`:
+Complete `my.sd()`:
 
 ```r
 my.sd <- function(x) {
@@ -201,12 +274,12 @@ Eva      83    77          88      90
 ```
 
 a) Apply `my.se()` to get the standard error for **every subject**.
-b) Apply `my.mean()` from part 4 to get the average score of **every student**.
-c) What is `dim(scores)`, and what is the length of your result in a)?
+b) Give two ways to get the average score of **every subject**: one with `apply()` and one with a special matrix function from the lecture.
+c) Apply `my.mean()` from part 4 to get the average score of **every student**.
 
 ## 6. Fuel Economy (`mpg`)
 
-You are writing a report on the `mpg` dataset (234 cars, from the `ggplot2` package):
+You are writing a report on the `mpg` dataset (234 cars, from `ggplot2`):
 
 ```
 > head(mpg)
@@ -256,13 +329,9 @@ Caused by error:
   `total` must be a vector, not a function.
 
 # D.)
-mpg %>%
-  select(manufacturer, model, hwy) %>%
-  arrange(desc(cty))
+aggregate(hwy ~ class, data = mpg, FUN = mean())
 
-Error in `arrange()`:
-  Caused by error:
-  object 'cty' not found
+Error in mean.default() : argument "x" is missing, with no default
 ```
 
 Next, you look at how the drive train `drv` (`"4"`, `"f"`, `"r"`) influences highway mileage:
@@ -273,7 +342,7 @@ res <- lm(hwy ~ drv, data = mpg)
 
 a) What do `length(res$coefficients)` and `length(res$residuals)` return?
 
-b) Fill in the blanks so that the plot shows boxplots of `hwy` per drive train in grey, the model predictions per drive train in **blue** on top of them, and a legend in the top right:
+b) Fill in the blanks so that the plot shows boxplots of `hwy` per drive train, the model predictions per drive train in **blue** on top of them, and a legend in the top right:
 
 ```r
 boxplot(___, data = mpg, xlab = "drive train")
@@ -286,24 +355,31 @@ c) Why does every blue "box" collapse to a single line?
 
 ## 7. Data Vectors
 
-Give the results of the following operations on dates, a factor and an ordered factor.
-
 ```r
 # A.)
-dates <- as.Date(c("2024-03-01", "2024-02-28", "2024-03-03"))
+d <- as.Date(c("3/14/24", "12/1/23"), format = "%m/%d/%y")
+d
 
-range(dates)
+range(d)
 
-diff(range(dates))
+quarters(d)
+
+d[1] - d[2]
 
 # B.)
-mon <- months(dates)
-mon
-[1] "March"    "February" "March"
+fat <- factor(c("REGULAR", "LIGHT", "REGULAR"))
 
-range(factor(mon))
+as.numeric(fat)
+
+as.numeric(relevel(fat, ref = "REGULAR"))
+
+range(fat)
 
 # C.)
+levels(fat) <- c("< 20% fat", "> 20% fat")
+fat
+
+# D.)
 sizes <- factor(c("M", "XL", "S", "M"),
                 levels = c("S", "M", "L", "XL"), ordered = TRUE)
 
@@ -312,14 +388,11 @@ range(sizes)
 sizes > "M"
 
 table(sizes)
-
-# D.)
-range(c("banana", "Apple", "cherry"))
 ```
 
 ## 8. Coercion
 
-Remember that a vector can only hold one data type. What does `typeof()` return after each replacement: logical, integer, double or character?
+What does `typeof()` return after each operation: logical, integer, double or character? Say whether the coercion is "upwards" or "downwards" in the reader's terminology.
 
 ```r
 A <- c(1.5, 2, 3)
@@ -339,59 +412,167 @@ D[5] <- 10L
 typeof(D)
 D            # also give the printed vector!
 
-E <- c("x", "y")
-E[1] <- NA
-typeof(E)
+dbl <- c(0.5, 0.6)
+chr <- c("a", "b")
+E <- c(dbl, chr)
+typeof(E); E
 ```
 
+
+## 9. Indexing and data.table
+
+**Indexing (Lecture 5).** What is the output?
+
+```r
+x_vec <- 2 * (1:10)
+
+# A.)
+x_vec[c(-1, -10)]
+
+# B.)
+x_vec[x_vec > 5 & x_vec < 12]
+
+# C.)
+x_vec %in% c(4, 7, 8)
+
+x_mat <- matrix(1:12, nrow = 3)
+
+# D.)
+x_mat[8]
+
+# E.)
+x_mat[2, 3]
+
+# F.)
+x_mat[c(2, 3)]
+
+vec <- c(5, 0, 12, 0, 3)
+
+# G.)
+which(vec == 0)
+
+# H.)
+which.max(vec)
+
+# I.)
+order(vec)
+```
+
+**data.table (Lecture 6).** You read the New York flights data with `fread()`:
+
+```
+> flights <- fread("flights14.csv")
+> dim(flights)
+[1] 253316     10
+> head(flights, 3)
+    year month   day dep_delay arr_delay carrier origin   dest air_time distance
+   <int> <int> <int>     <int>     <int>  <char> <char> <char>    <int>    <int>
+1:  2014     1     1        14        13      AA    JFK    LAX      359     2475
+2:  2014     1     1        -3        13      AA    JFK    LAX      363     2475
+3:  2014     1     1         2         9      AA    JFK    LAX      351     2475
+```
+
+a) What is the difference between `flights[, origin]`, `flights[, "origin"]` and `flights[, .(origin)]`?
+b) Select `dep_delay` and `arr_delay`, renamed to `delay_dep` and `delay_arr`.
+c) Return the **last 3 rows** using `.N`.
+d) Count the flights of carrier `"DL"` per origin airport, sorted from most to fewest.
+e) Compute the mean arrival delay per month for flights departing from JFK. Sort by month using the grouping argument itself.
+
+## 10. Regular Expressions and Web Scraping
+
+```r
+x <- c("RStudio", "v.0.99.484", "2015", "09-22-2015", "grep vs. grepl")
+
+# A.)
+grepl("[0-9]", x)
+
+# B.)
+grep("[Gg]", x)
+
+# C.)
+gsub("\\d", "#", "Room 101")
+
+# D.)
+gsub("[0-9]+", "#", "Room 101, floor 3")
+
+# E.)
+sub("o", "0", "foo boo")
+gsub("o", "0", "foo boo")
+
+# F.)
+strsplit("a,b,,c", ",")
+```
+
+G.) Complete the code so that it extracts all hashtags (a `#` followed by one or more letters, digits or underscores) from the tweet:
+
+```r
+tweet <- "Exam prep #RStats with #data_table and #regex2025!"
+regmatches(tweet, ___(___, tweet))[[1]]
+# "#RStats" "#data_table" "#regex2025"
+```
+
+H.) Web scraping with `rvest`. Which function do you use to:
+1. parse the HTML of a web page from its URL,
+2. extract **all** tables of the page as a list of data frames,
+3. select all nodes with the CSS class `price`,
+4. get the text out of the selected nodes?
+
+I.) The scraped price is `"€ 1,299.00"`. Convert it into the number `1299` with one `gsub()` and `as.numeric()`.
 ---
 ---
 
 # Practice Exam 2
 
-## 1. Titanic Passengers
+## 1. Bike Sharing Chicago
+
+`Chicago.agg` is an aggregated version of 9.5 million Divvy bike trips:
 
 ```
-> str(titanic)
-Classes 'data.table' and 'data.frame':  891 obs. of  8 variables:
- $ passenger_id: int  1 2 3 4 5 6 7 8 9 10 ...
- $ survived    : int  0 1 1 1 0 0 0 0 1 1 ...
- $ pclass      : int  3 1 3 1 3 3 1 3 3 2 ...
- $ name        : chr  "Braund, Mr. Owen Harris" "Cumings, Mrs. John Bradley" ...
- $ sex         : chr  "male" "female" "female" "female" ...
- $ age         : num  22 38 26 35 35 NA 54 2 27 14 ...
- $ fare        : num  7.25 71.28 7.92 53.1 8.05 ...
- $ embarked    : chr  "S" "C" "S" "S" ...
+> str(Chicago.agg)
+'data.frame':   12433 obs. of 7 variables:
+ $ week        : int 1 1 1 1 1 1 1 1 1 1 ...
+ $ usertype    : chr "Subscriber" "Subscriber" "Subscriber" "Subscriber"..
+ $ gender      : chr "Female" "Female" "Female" "Female" ...
+ $ events      : chr "clear" "clear" "clear" "clear" ...
+ $ temperature : num -4 0 1 1.9 3 3.9 5 6.1 7 8.1 ...
+ $ tripduration: num 4.22 8.58 5.47 10.4 8.01 ...
+ $ no.customers: int 1 14 2 21 9 46 4 2 3 3 ...
 ```
 
 What is the output of the following data operations?
 
 ```r
 # A.)
-length(titanic)
+ncol(Chicago.agg)
 
 # B.)
-mean(titanic$age)
+typeof(Chicago.agg[, 5])
 
 # C.)
-unique(titanic$pclass)
+typeof(Chicago.agg[5])
 
 # D.)
-class(titanic[, survived])
+summary(Chicago.agg$events)
 
 # E.)
-levels(factor(titanic$embarked[1:4]))
+head(Chicago.agg$no.customers, 3) * 2
+
+# F.)
+Chicago.agg$temperature[Chicago.agg$temperature < 1][1:2]
+
+# G.)
+names(Chicago.agg)[c(1, 7)]
 ```
 
 ## 2. RMarkdown
 
-Complete the YAML header so that (1) the file is rendered into a **pdf** document, (2) a table of contents with **only level 1** headers is created, and (3) the `date` field always shows **today's date** (use inline R code).
+Complete the YAML header so that (1) the file is rendered into an **HTML** document, (2) a table of contents is created with all level 1, 2 **and** 3 headers (which option can you leave out here, and why?), and (3) the code uses the **tango** syntax highlighting style.
 
-The file below contains several mistakes that stop it from rendering. Spot them. The inline sentence in the "Age" section would render, but it shows a useless value. Why, and how do you fix it?
+The file below contains several mistakes that stop it from rendering. Spot them. The inline sentence in the "Temperature" section would render, but it shows a useless value. Why, and how do you fix it?
 
 ````markdown
 ---
-title: "Titanic Analysis"
+title: "Chicago Bike Trips"
 author: "Eager Student"
 ---
 
@@ -399,27 +580,26 @@ author: "Eager Student"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Survival by Class
+# Trip Duration by Weather
 
-```{r survival-plot, fig.cap = Survival rate per class}
-ggplot(rates, aes(x = factor(pclass), y = rate)) +
-  geom_col()
+```{r duration-plot, fig.cap = Trip duration per weather event}
+boxplot(tripduration ~ events, data = Chicago.agg)
 ```
 
 ```{r load-data, include = FALSE}
-library(data.table)
-library(ggplot2)
-titanic <- fread("titanic.csv)
-rates <- titanic[, .(rate = mean(survived)), by = pclass]
+Chicago.agg <- read.csv("Chicago.agg.csv)
+Chicago.agg$temperature[3] <- NA
 ```
 
-# Age
+# Temperature
 
-The average passenger age was `r mean(titanic$age)` years.
+The average temperature was `r mean(Chicago.agg$temperature)` degrees.
 
 ```{r load-data}
-hist(titanic$age)
+hist(Chicago.agg$temperature)
 ```
+
+The relationship is modelled as $y = \beta_0 + \beta_1 x$.
 ````
 
 ## 3. draw_points()
@@ -440,17 +620,23 @@ draw_points <- function(fun = function(x) x^2, from = -2, to = 2, by = 0.5,
 }
 ```
 
-Provide the function calls that produce the following plots. (`pch = 1`: open circle, `pch = 17`: filled triangle, `pch = 19`: filled circle.)
+a) Provide the function calls that produce the following plots. (`pch = 1`: open circle, `pch = 17`: filled triangle, `pch = 19`: filled circle.)
 
 ![Exam 2 plots](figures/exam2_q3.png)
 
-Plot A has 9 open black circles. Plot B has filled dark-orange circles from 0 to 3. Plot C has purple triangles with a dashed line, 17 points.
+- **Plot A:** 9 open black circles.
+- **Plot B:** filled dark-orange circles from 0 to 3.
+- **Plot C:** purple triangles with a dashed line, 17 points.
 
-How many points does `draw_points(from = 0, to = 10, by = 2)` draw?
+b) How many points does `draw_points(from = 0, to = 10, by = 2)` draw?
+
+c) After calling `draw_points(line = TRUE)`, you want to add a legend in the top left that explains the dashed line as `"x squared"`, **without** a box around it. Complete: `legend(___, ___, lty = ___, bty = ___)`.
+
+d) Give three different ways to specify the colour red for the `col` argument (colour name, RGB and hex).
 
 ## 4. Cumulative Sums and Maxima
 
-The cumulative sum of a vector is a vector of the same length whose i-th element is the sum of the first i elements. For example, `c(3, 1, 4, 1)` gives `c(3, 4, 8, 9)`. Complete the code below so that `my.cumsum()` works **without** `cumsum()` or `sum()`:
+The cumulative sum of a vector is a vector of the same length whose i-th element is the sum of the first i elements. For example, `c(3, 1, 4, 1)` gives `c(3, 4, 8, 9)`. Complete `my.cumsum()` so that it works **without** `cumsum()` or `sum()`:
 
 ```r
 my.cumsum <- function(x){
@@ -463,7 +649,7 @@ my.cumsum <- function(x){
 }
 ```
 
-Complete `my.which.max()`, which returns the **position** of the (first) maximum of `x` without using `which.max()` or `max()`:
+Complete `my.which.max()`, which returns the **position** of the (first) maximum without using `which.max()` or `max()`:
 
 ```r
 my.which.max <- function(x){
@@ -480,7 +666,7 @@ my.which.max(c(4, 9, 2, 9))
 # 2
 ```
 
-Min-max **normalisation** rescales a vector to the interval [0, 1]: `(x - min(x)) / (max(x) - min(x))`. Complete the function so that it stops with the message `"all values are equal!"` if the denominator would be 0:
+Min-max **normalisation** rescales a vector to [0, 1]: `(x - min(x)) / (max(x) - min(x))`. Complete the function so that it stops with `"all values are equal!"` if the denominator would be 0:
 
 ```r
 normalize <- function(x){
@@ -492,11 +678,57 @@ normalize(c(2, 4, 6, 10))
 # 0.00 0.25 0.50 1.00
 ```
 
+
+**Multiple outputs and multiple inputs (Lecture 5).** What do the lines marked A–F return?
+
+```r
+stats2 <- function(x) {
+  m <- mean(x)
+  s <- sd(x)
+  list(mean = m, sd = s)
+}
+res <- stats2(c(2, 4, 6))
+res$sd       # A
+res[[1]]     # B
+class(res)   # C
+
+sum.diff <- function(vec1 = 0, vec2 = 0) {
+  sum(vec1 - vec2)
+}
+a <- c(1, 3)
+b <- c(2, 4)
+sum.diff(a, b)       # D
+sum.diff(b, a)       # E
+sum.diff(vec2 = b)   # F
+```
 ## 5. Step Counts
+
+**Matrix warm-up**
+
+```r
+M <- matrix(c(2, 1, 1, 3), ncol = 2)
+
+# A.)
+M * M
+
+# B.)
+M %*% M
+
+# C.)
+det(M)
+
+# D.)
+solve(M)
+
+# E.)
+cbind(M, rbind(M, M))
+```
+
+**z-scores**
 
 The **z-score** standardises a vector: `z(x) = (x - mean(x)) / sd(x)`.
 
-a) Write `my.sd()` (sample standard deviation, see the formula in Exam 1, Part 5) from scratch.
+a) Write `my.sd()` (sample standard deviation, see Exam 1, Part 5) from scratch.
 
 b) Complete `my.zscore()` using `my.sd()`:
 
@@ -570,14 +802,9 @@ Error in `geom_point()`:
   Did you use `%>%` or `|>` instead of `+`?
 
 # D.)
-diamonds %>%
-  select(carat, price) %>%
-  group_by(cut) %>%
-  summarize(M.ppc = mean(price / carat))
+subset(diamonds, select = c(carat, price), subset = cut = "Ideal")
 
-Error in `group_by()`:
-  Must group by variables found in `.data`.
-  Column `cut` is not found.
+Error: unexpected '=' in "subset(diamonds, select = c(carat, price), subset = cut ="
 ```
 
 Next, you fit a model for the price:
@@ -595,16 +822,19 @@ plot(x = ___, y = ___, xlab = "fitted values", ylab = "residuals")
 abline(___ = 0, col = "red", lwd = 2)
 ```
 
+c) Rewrite snippet B with base R `aggregate()` so that you get the mean price per `cut`.
+
 ## 7. Data Vectors
 
 ```r
 # A.)
-dates <- as.Date("2024-12-30") + 0:3
-dates
+seq(as.Date("2024-01-31"), by = "month", length.out = 3)
 
-range(dates[format(dates, "%Y") == "2025"])
+library(lubridate)
+as.Date("2024-01-31") %m+% months(0:2)
 
 # B.)
+dates <- as.Date("2024-12-30") + 0:3
 wd <- weekdays(dates)
 wd
 [1] "Monday"    "Tuesday"   "Wednesday" "Thursday"
@@ -616,6 +846,9 @@ range(f)
 max(f[f < "Wednesday"])
 
 # C.)
+difftime(as.Date("2024-03-01"), as.Date("2024-02-01"), units = "hours")
+
+# D.)
 grades <- factor(c("B", "A", "C", "B"),
                  levels = c("C", "B", "A"),
                  labels = c("fair", "good", "excellent"), ordered = TRUE)
@@ -624,16 +857,11 @@ grades
 range(grades)
 
 as.integer(grades)
-
-# D.)
-range(c(10, 2, 33))
-
-range(c("10", "2", "33"))
 ```
 
 ## 8. Coercion
 
-What does `typeof()` return, and what does the vector look like?
+What does `typeof()` return, and what does the result look like?
 
 ```r
 A <- c(TRUE, FALSE, TRUE)
@@ -652,8 +880,7 @@ D <- c(1L, 2L)
 D[2] <- 2
 typeof(D)
 
-E <- list(1, "a")
-E[[2]] <- TRUE
+E <- cbind(1:2, c("a", "b"))
 typeof(E)
 
 x <- c(1, "2", 3)
@@ -661,77 +888,185 @@ sum(x)
 sum(as.numeric(x))
 ```
 
+
+## 9. Indexing and data.table
+
+**List and data frame indexing (Lecture 5).**
+
+```r
+lst <- list(vec = 1:5, mat = matrix(1:4, nrow = 2), text = "hi")
+
+# A.)
+class(lst[2])
+
+# B.)
+lst[[2]][2, 1]
+
+# C.)
+lst$vec[lst$vec > 2]
+
+# D.)
+length(lst[-1])
+
+df <- data.frame(a = 1:3, b = c(10, 20, 30))
+
+# E.)
+df[df > 5]
+
+# F.)
+df[[2]][2]
+
+# G.)
+class(df[2])
+```
+
+**data.table (Lecture 6)**, using the `flights` data from `flights14.csv`:
+
+```
+> flights <- fread("flights14.csv")
+> dim(flights)
+[1] 253316     10
+> head(flights, 3)
+    year month   day dep_delay arr_delay carrier origin   dest air_time distance
+   <int> <int> <int>     <int>     <int>  <char> <char> <char>    <int>    <int>
+1:  2014     1     1        14        13      AA    JFK    LAX      359     2475
+2:  2014     1     1        -3        13      AA    JFK    LAX      363     2475
+3:  2014     1     1         2         9      AA    JFK    LAX      351     2475
+```
+
+a) How do you convert an existing data.frame `flights_df` into a data.table without copying it?
+b) How many flights went to a destination containing `"SFO"` in March? (Use `%like%`.)
+c) Compute the mean departure delay per carrier, only for carriers `"AA"` and `"UA"`. (Use `%chin%`.)
+d) How many flights had an arrival delay between −10 and 10 minutes? (Use `%between%`.)
+e) What does `.N` contain when it is used (i) without `by` and (ii) with `by = origin`?
+f) What is the difference between `by = .(origin, dest)` and `keyby = .(origin, dest)`?
+
+## 10. Regular Expressions and Web Scraping
+
+```r
+# A.)
+gsub("[[:punct:]]", "", "Hello, World!")
+
+# B.)
+sub("New", "Old", c("New New York", "new York"))
+
+# C.)
+sub("New", "Old", c("New New York", "new York"), ignore.case = TRUE)
+
+# D.)
+sub("\\$", "EUR ", "$100")
+
+# E.)
+gsub("a+", "a", "baaad caat")
+
+# F.)
+grepl("[0-9]{4}", c("2024", "v24", "12345"))
+
+# G.)
+grep("North", c("New England", "East North Central", "West North Central"),
+     value = TRUE)
+```
+
+H.) Complete `count_words()`, which returns the number of words in a string. Words can be separated by one **or more** whitespace characters:
+
+```r
+count_words <- function(s) {
+  length(strsplit(s, ___)[[1]])
+}
+count_words("R  is   fun")
+# 3
+```
+
+I.) You scrape the "Scrape This Site" country page:
+
+```r
+page <- read_html("https://www.scrapethissite.com/pages/simple/")
+info <- page %>%
+  html_nodes(".country-population,.country-area") %>%
+  html_text()
+info[1:4]
+[1] "84000"   "468.0"   "4975593" "82880.0"
+```
+
+1. In which order do population and area appear in `info`?
+2. Write code that keeps only the **populations** (every second element, starting with the first) and computes their sum as a number.
 ---
 ---
 
 # Practice Exam 3
 
-## 1. Spotify Songs
+## 1. Air Quality
+
+The built-in `airquality` dataset contains daily air quality measurements in New York (May–September 1973):
 
 ```
-> str(spotify)
-Classes 'data.table' and 'data.frame':  2000 obs. of  8 variables:
- $ track       : chr  "Blinding Lights" "Shape of You" "Someone You Loved" ...
- $ artist      : chr  "The Weeknd" "Ed Sheeran" "Lewis Capaldi" ...
- $ year        : int  2019 2017 2018 2019 2016 ...
- $ duration_ms : int  200040 233712 182160 174000 ...
- $ popularity  : int  91 87 84 80 77 ...
- $ explicit    : logi  FALSE FALSE FALSE TRUE FALSE ...
- $ genre       : Factor w/ 6 levels "hip hop","latin",..: 4 4 4 1 3 ...
- $ danceability: num  0.514 0.825 0.501 0.733 0.648 ...
+> str(airquality)
+'data.frame':   153 obs. of  6 variables:
+ $ Ozone  : int  41 36 12 18 NA 28 23 19 8 NA ...
+ $ Solar.R: int  190 118 149 313 NA NA 299 99 19 194 ...
+ $ Wind   : num  7.4 8 12.6 11.5 14.3 14.9 8.6 13.8 20.1 8.6 ...
+ $ Temp   : int  67 72 74 62 56 66 65 59 61 69 ...
+ $ Month  : int  5 5 5 5 5 5 5 5 5 5 ...
+ $ Day    : int  1 2 3 4 5 6 7 8 9 10 ...
 ```
 
-What is the output of the following data operations?
+What is the output of the following data operations? (Only two days have a wind speed above 20 mph: 9 May and 17 June.)
 
 ```r
 # A.)
-dim(spotify)
+dim(airquality)
 
 # B.)
-class(spotify$genre)
+mean(airquality$Ozone)
 
 # C.)
-typeof(spotify$genre)
+sum(is.na(airquality$Ozone[1:10]))
 
 # D.)
-spotify[[3]][1:2]
+airquality[airquality$Wind > 20, "Day"]
 
 # E.)
-mean(spotify$explicit)    # describe what the number means
+typeof(airquality$Temp * 2L)
+
+# F.)
+class(airquality[, c("Temp", "Month")])
+
+# G.)
+range(airquality$Month)
 ```
 
 ## 2. RMarkdown
 
-Complete the YAML header so that (1) the file is rendered into a **Word** document, and (2) a table of contents with headers up to **level 2** is created. In addition, (3) change the setup chunk so that, for the **whole document**, no code and no messages appear in the output.
+Complete the YAML header so that (1) the file is rendered into a **Word** document, and (2) a table of contents with headers up to **level 2** is created. In addition, (3) change the setup chunk so that, for the **whole document**, no code and no messages are shown in the output. (4) Which output format would you put in the YAML header to create **PowerPoint slides** instead?
 
 Spot the mistakes that stop the file from rendering:
 
 ````markdown
 ---
-title: "Spotify Trends"
+title: "Air Quality in New York"
 author: "Eager Student"
 ---
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
-spotify <- fread("spotify.csv")
 ```
 
-# Popularity by Genre
+# Ozone by Month
 
 ```{r boxplot}
-ggplot(Spotify, aes(x = genre, y = popularity)) +
+airquality %>%
+  ggplot(aes(x = factor(Month), y = Ozone)) +
   geom_boxplot
 ```
 
 ```{r counts, results = hide}
-spotify[, .N, by = genre]
+aggregate(Ozone ~ Month, data = Airquality, FUN = mean)
 ``
 
 # Conclusion
 
-Pop is the most popular genre.
+Ozone levels peak in July and August.
 ````
 
 ## 3. draw_curve()
@@ -751,11 +1086,17 @@ draw_curve <- function(fun = function(x) x^3, from = -2, to = 2,
 }
 ```
 
-Provide the function calls that produce the following plots. (`type = "s"` draws steps, and `type = "b"` draws both points and lines.)
+a) Provide the function calls that produce the following plots. (`type = "s"` draws steps, and `type = "b"` draws both points and lines.)
 
 ![Exam 3 plots](figures/exam3_q3.png)
 
-Plot B has red open circles with a dashed grey line at y = 0. Plot C is a dark-green step curve of |x|. Plot D is blue, has 6 points, and covers 0 ≤ x ≤ 1.
+- **Plot B:** red open circles with a dashed grey line at y = 0.
+- **Plot C:** a dark-green step curve of |x|.
+- **Plot D:** blue, 6 points, 0 ≤ x ≤ 1.
+
+b) Which `par()` setting arranges the 4 plots in a **2 × 2 grid, filled column by column**?
+
+c) Recreate Plot A with `ggplot2`. Build a data frame with `x` and `y` and use `geom_line()`. Use the theme with a white background and no grid lines.
 
 ## 4. Maxima and Top-k
 
@@ -802,7 +1143,56 @@ my.range.width(c(4, -2, 7))
 # 9
 ```
 
+
+**Loops (Lecture 5).**
+
+```r
+x <- 1:4
+y <- integer(4)
+for (i in 1:4) {
+  y[i] <- x[i]^2
+}
+y            # A.) What is y?
+             # B.) Write the vectorised version without a loop.
+
+m <- matrix(0, nrow = 2, ncol = 3)
+for (i in 1:2) {
+  for (j in 1:3) {
+    m[i, j] <- i * j
+  }
+}
+m            # C.) Write down m.
+
+for (i in 1:3) {
+  z <- i * 10
+}
+z            # D.) What is z?
+```
 ## 5. Stock Prices
+
+**Matrix warm-up**
+
+```r
+x <- 1:3
+y <- 4:6
+
+# A.)
+cbind(x, y)
+
+# B.)
+rbind(x, y)
+
+# C.)
+dim(cbind(rbind(x, y), rbind(x, y)))
+
+# D.)
+cbind(cbind(x, y), rbind(x, y))
+
+# E.)
+x * c(10, 100)
+```
+
+**Percent changes**
 
 The daily **percent change** of a price series is
 
@@ -817,7 +1207,7 @@ pct.change <- function(x) {
 }
 ```
 
-b) The **volatility** of a stock is the standard deviation of its percent changes. Complete `volatility()` using `pct.change()` and `sd()`:
+b) The **volatility** of a stock is the standard deviation of its percent changes. Complete `volatility()`:
 
 ```r
 volatility <- function(x) {
@@ -829,15 +1219,16 @@ Consider the matrix `stocks` with closing prices for one week:
 
 ```
 > stocks
-        Mon   Tue   Wed   Thu   Fri
-ACME  100.0 102.0  99.0 101.5 104.0
-Globex 50.0  50.5  51.0  50.0  52.0
-Initech 20.0 18.0  21.0  19.5  20.5
+         Mon   Tue   Wed   Thu   Fri
+ACME   100.0 102.0  99.0 101.5 104.0
+Globex  50.0  50.5  51.0  50.0  52.0
+Initech 20.0  18.0  21.0  19.5  20.5
 ```
 
 c) Apply `volatility()` to every stock (row). Which stock do you expect to be the most volatile?
 d) What are the dimensions of `apply(stocks, 1, pct.change)`? What are its row names and column names?
 e) What is the first value of `pct.change(stocks["ACME", ])`?
+f) Compute the average closing price of every stock with `rowMeans()`.
 
 ## 6. Star Wars (dplyr)
 
@@ -864,6 +1255,7 @@ Error: unexpected symbol in:
   summarize(n = n() M.height"
 
 # C.)
+library(dplyr)
 starwars %>%
   select(name, height, mass) %>%
   left_join(planets, by = "homeworld")
@@ -887,10 +1279,10 @@ res <- lm(mass ~ height, data = starwars)
 
 a) `mass` has 28 missing values and `height` has 6. Every character with a missing height is also missing its mass. How long is `res$residuals`?
 
-b) Fill in the blanks to draw a scatterplot of mass against height with the regression line in red:
+b) Fill in the blanks to draw a scatterplot of mass against height with filled points (`pch = 19`), the title `"Star Wars"`, and the regression line in red:
 
 ```r
-plot(___, data = starwars)
+plot(___, data = starwars, pch = ___, main = ___)
 abline(___, col = "red", lwd = 2)
 ```
 
@@ -900,16 +1292,20 @@ c) One character (Jabba, 1358 kg) has a huge residual. Which element of `res` wo
 
 ```r
 # A.)
+as.numeric(as.Date(c("1970-01-10", "1969-12-31")))
+
+as.Date("17 March 2025", format = "%d %B %Y")
+
 dates <- as.Date(c("2024-01-15", "2023-11-02", "2024-07-30"))
-
-range(dates)
-
 diff(range(dates))
 
 format(range(dates), "%B")
 
 # B.)
 range(factor(months(dates)))
+
+library(lubridate)
+wday(as.Date("2024-01-01"), label = TRUE)
 
 # C.)
 level <- factor(c("high", "low", "medium", "high"),
@@ -919,10 +1315,12 @@ min(level)
 
 range(level[level != "low"])
 
-# D.)
-range(c(TRUE, FALSE, TRUE))
+relevel(level, ref = "high")
 
-range(numeric(0))
+# D.)
+library(plyr)
+dir <- factor(c("N", "S", "N"))
+revalue(dir, c("N" = "North"))
 ```
 
 ## 8. Coercion
@@ -947,4 +1345,84 @@ typeof(D); class(D)
 E <- factor(c("10", "20", "10"))
 as.numeric(E)
 as.numeric(as.character(E))
+
+F <- list(1L, "a", TRUE)
+typeof(F); typeof(F[[1]])
 ```
+
+## 9. Indexing and data.table
+
+**Indexing functions (Lecture 5)** on the built-in `mtcars` data (32 cars). The car with the lowest `mpg` is the Cadillac Fleetwood, the car with the highest `hp` is the Maserati Bora, and the three lowest `hp` values are 52, 62 and 65.
+
+```r
+# A.)
+rownames(mtcars)[which.min(mtcars$mpg)]
+
+# B.)
+mtcars[which.max(mtcars$hp), "hp"] > 300
+
+# C.)
+head(mtcars[order(mtcars$hp), "hp"], 3)
+
+# D.)
+duplicated(c(1, 2, 2, 3, 1))
+
+# E.)
+is.finite(c(1, NA, Inf, -2))
+
+# F.)
+which(c(3, -1, 4) < 0 & c(TRUE, TRUE, FALSE))
+```
+
+**data.table (Lecture 6).** You convert `airquality` (see Part 1) into a data.table:
+
+```r
+library(data.table)
+aq <- as.data.table(airquality)
+```
+
+a) What does `aq[.N]` return?
+b) Compute the mean temperature per month.
+c) Count the days per month **with** an ozone measurement (no `NA`).
+d) How many days had a temperature between 80 and 90 °F?
+e) What does `aq[order(-Wind)][1:2, Day]` return? (See the hint in Part 1.)
+f) Why does `aq[, 4]` return a data.table, while `airquality[, 4]` returns a vector?
+
+## 10. Regular Expressions and Web Scraping
+
+```r
+# A.)
+gsub("\\w", "_", "R is 4 fun")
+
+# B.)
+gsub("\\D", "", "Tel: +31 (0)10 408")
+
+# C.)
+x <- "Call 010-1234 or 06-555 today"
+regmatches(x, gregexpr("[0-9]+", x))[[1]]
+
+# D.)
+regmatches(x, gregexpr("[0-9-]+", x))[[1]]
+
+# E.)
+grep("[^0-9a-zA-Z]", c("R2D2", "C-3PO", "BB8", "K 2SO"), value = TRUE)
+```
+
+F.) Trace the sign-collapsing loop from Lecture 7 by hand. Which lines does it print?
+
+```r
+x <- "5-+--3"
+while (grepl("\\+\\+|--|\\+-|-\\+", x)) {
+  x <- gsub("\\+\\+", "+", x)
+  x <- gsub("--", "+", x)
+  x <- gsub("\\+-|-\\+", "-", x)
+  print(x)
+}
+```
+
+G.) Why is a `while` loop used here and not a `for` loop?
+
+H.) Web scraping. You scraped a Wikipedia table with `beer.table <- html_table(read_html(url))`.
+1. Why do you need `beer.table[[1]]` to get the actual table?
+2. The country names contain footnote marks such as `"Czech Republic[a]"`. Remove all punctuation from `beer.table[[1]]$Country` with one `gsub()` call.
+3. Why does the lecture convert `Country` into a factor with `levels = beer.table[[1]]$Country` before plotting with ggplot?
