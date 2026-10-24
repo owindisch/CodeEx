@@ -2,13 +2,16 @@
 ## Same code as assignment3_code.Rmd (generated with knitr::purl), for running without knitting.
 ## Run inside the assignment3 folder:  Rscript assignment3_revenue.R
 
-library(tidyverse)
-library(glmnet)
-library(boot)
-library(gridExtra)
+# active packages needed (or install if not present), as in the lecture code
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("gridExtra")) install.packages("gridExtra")
+if (!require("caret"))     install.packages("caret")     # createDataPartition() for the train/test split
+if (!require("boot"))      install.packages("boot")      # bootstrap of the eigenvalues
+if (!require("glmnet"))    install.packages("glmnet")    # ridge regression
+source("permtestPCA.R")                                  # permutation test for pca (lecture week 5)
 
 # no setwd() needed: knitr runs the chunks in the folder of this .Rmd, so keep the
-# .Rmd and the csv files in the same folder (setwd() in a chunk is reset after that chunk)
+# .Rmd, permtestPCA.R and the csv files in the same folder
 athletics  <- read.csv("data_783996yw.csv")
 prediction <- read.csv("predictions-2.csv")
 
@@ -111,10 +114,11 @@ prediction_new <- logged_vars(prediction_new)
 
 # 3. Train/test split and imputation (on train only)
 
-set.seed(123) #reproducible random 80/20 split
-train_index <- sample(seq_len(nrow(athletics_new)), size = floor(0.8 * nrow(athletics_new)))
-train_data  <- athletics_new[train_index, ]
-test_data   <- athletics_new[-train_index, ]
+# create train and test set (do NOT burn the test set), as in the penalized regression lecture code
+set.seed(123)
+trainRowNumbers <- createDataPartition(athletics_new$log_revenue, p = 0.8, list = FALSE) # step 1: row numbers for the training data (80%)
+train_data <- athletics_new[trainRowNumbers, ]  # step 2: training dataset
+test_data  <- athletics_new[-trainRowNumbers, ] # step 3: test dataset
 table(train_data$classification) #are all levels in the training set?
 
 train_medians <- sapply(train_data[num_vars], median, na.rm = TRUE) #medians from the training data only (no leakage)
@@ -131,176 +135,174 @@ cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), d
 round(cor_tab, 2) #salaries and coaches correlate strongly: in eada revenue must cover expenses
 
 
-# 4. PCA on the 28 numerical predictors (training data, standardised)
+# 4. PCA on the 28 numerical predictors (training data), as in the lecture code of week 5
 # the dummies are left out: pca on 0/1 variables is hard to interpret, they return in the pcr
 
-X_train <- train_data[, num_vars]
-X_test  <- test_data[, num_vars]
-p       <- ncol(X_train) #28 variables
+X_pca      <- train_data[, num_vars] # predictors of the training set
+X_pca_test <- test_data[, num_vars]  # predictors of the test set
+p          <- ncol(X_pca)            # 28 variables
 
-pca_model   <- prcomp(X_train, center = TRUE, scale. = TRUE) #scale = pca on the correlation matrix (different units)
-eigenvalues <- pca_model$sdev^2              #variance of each component
-vaf         <- eigenvalues / sum(eigenvalues) #variance accounted for (share)
-cum_vaf     <- cumsum(vaf)                    #cumulative vaf
-pca_summary <- data.frame(PC = seq_along(eigenvalues), Eigenvalue = eigenvalues, VAF = vaf, CumulativeVAF = cum_vaf)
-round(pca_summary, 3)
+fitpca <- princomp(X_pca, cor = TRUE, scores = TRUE) # pca on the correlation matrix (variables have different units)
+summary(fitpca)                                      # sd, proportion of variance (vaf) and cumulative vaf per component
+eigenvalues <- fitpca$sdev^2                         # eigenvalue = variance of each component
+vaf         <- eigenvalues / p                       # proportion vaf (eigenvalues of a correlation matrix sum to p)
+cum_vaf     <- cumsum(vaf)
 
-# 4a. simple rules as a reference: kaiser and vaf (both are tested with the bootstrap below) + scree plot
-k_kaiser <- sum(eigenvalues > 1)      #kaiser: a pc must explain more than one original variable
-k_vaf80  <- which(cum_vaf >= 0.80)[1] #first pc where 80% of the variance is reached
+# 4a. simple rules as a reference: scree plot, kaiser and vaf (kaiser and vaf are bootstrapped below)
+screeplot(fitpca, npcs = p, type = "lines", main = "Scree plot", las = 1) # look for the elbow
+abline(h = 1, col = "red", lty = 2)                                       # red line = kaiser
+k_kaiser <- sum(eigenvalues > 1)      # kaiser: a pc must explain more than one original variable
+k_vaf80  <- which(cum_vaf >= 0.80)[1] # first pc where 80% of the variance is reached
 
-scree <- ggplot(pca_summary, aes(PC, Eigenvalue)) + #scree plot: look for the elbow, red line = kaiser
-  geom_line(color = "steelblue") + geom_point(color = "steelblue") +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = seq_len(p)) +
-  labs(title = "Scree plot", x = "Principal component", y = "Eigenvalue") +
-  theme_minimal()
-scree
-
-# 4b. permutation test: shuffle each column separately -> no correlation left, pcs only reflect chance
-# a pc is meaningful if it explains more variance than 95% of the shuffled datasets
+# 4b. permutation test (lecture function permtestPCA): shuffle each column -> no correlation left,
+# eigenvalues only reflect chance; a pc is meaningful if its eigenvalue is above the upper bound
 set.seed(123)
-perm_vaf <- t(replicate(1000, {
-  X_perm <- apply(X_train, 2, sample)
-  ev <- prcomp(X_perm, center = TRUE, scale. = TRUE)$sdev^2
-  ev / sum(ev)
-})) #1000 x 28 matrix: vaf of each pc in each shuffled dataset
-perm_q95 <- apply(perm_vaf, 2, quantile, probs = 0.95) #95% chance level per pc
-perm_tab <- data.frame(PC = seq_len(p), VAF = vaf, Perm95 = perm_q95)
-round(head(perm_tab, 8), 3)
-k_perm <- which(vaf <= perm_q95)[1] - 1 #keep pcs up to the first one that is not above chance
+perm_range <- permtestPCA(X_pca, nTests = 1000) # plot + matrix with the 2.5% and 97.5% quantiles per eigenvalue
+round(cbind(Eigenvalue = eigenvalues, Lower = perm_range[, 1], Upper = perm_range[, 2])[1:8, ], 3)
+k_perm <- which(eigenvalues <= perm_range[, 2])[1] - 1 # keep pcs up to the first one that is not above chance
 
-permutation <- ggplot(perm_tab, aes(PC)) + #blue above red = keep
-  geom_line(aes(y = VAF, color = "Observed")) + geom_point(aes(y = VAF, color = "Observed")) +
-  geom_line(aes(y = Perm95, color = "Permutation 95%")) +
-  scale_color_manual(values = c("Observed" = "steelblue", "Permutation 95%" = "red")) +
-  scale_x_continuous(breaks = seq_len(p)) +
-  labs(title = "Permutation test for the number of PCs", x = "Principal component",
-       y = "Variance accounted for", color = NULL) +
-  theme_minimal()
-permutation
-
-# 4c. bootstrap of kaiser's rule and of vaf: resample institutions, redo the pca, store the eigenvalues
-my_boot_pca <- function(x, ind) { #pca on the resampled rows (ind), return the eigenvalues
-  prcomp(x[ind, ], center = TRUE, scale. = TRUE)$sdev^2
+# 4c. bootstrap of kaiser's rule and of vaf (lecture code week 5)
+# 1. define function that runs pca and returns the eigenvalues
+my_boot_pca <- function(x, ind){
+  res <- princomp(x[ind, ], cor = TRUE)
+  return(res$sdev^2)
 }
+# 2. run bootstrap
 set.seed(123)
-fit_boot  <- boot(data = X_train, statistic = my_boot_pca, R = 1000)
-eigs_boot <- fit_boot$t #1000 x 28 matrix of bootstrapped eigenvalues
+fit.boot  <- boot(data = X_pca, statistic = my_boot_pca, R = 1000)
+# 3. store the bootstrapped eigenvalues
+eigs.boot <- fit.boot$t # R x p matrix with eigenvalues
 
-kaiser_boot <- data.frame(PC = seq_len(p), Eigenvalue = eigenvalues, #95% ci per eigenvalue
-                          Lower = apply(eigs_boot, 2, quantile, 0.025),
-                          Upper = apply(eigs_boot, 2, quantile, 0.975))
-kaiser_boot$Significant <- kaiser_boot$Lower > 1 #significantly > 1 if the whole ci is above 1
-head(kaiser_boot, 8)
+# kaiser: is the eigenvalue significantly > 1? yes if the whole 95% ci is above 1
+kaiser_boot <- data.frame(PC = 1:p, Eigenvalue = eigenvalues,
+                          Lower = apply(eigs.boot, 2, quantile, 0.025),
+                          Upper = apply(eigs.boot, 2, quantile, 0.975))
+kaiser_boot$Significant <- kaiser_boot$Lower > 1
+round(kaiser_boot[1:8, 1:4], 3)
 k_kaiser_boot <- which(!kaiser_boot$Significant)[1] - 1
 
-kaiserboot <- ggplot(head(kaiser_boot, 10), aes(PC, Eigenvalue)) +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) + geom_point(color = "steelblue") +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = 1:10) +
-  labs(title = "Bootstrap 95% CIs of the eigenvalues (Kaiser's rule)", x = "Principal component", y = "Eigenvalue") +
-  theme_minimal()
-kaiserboot
+par(mar = c(5, 4, 4, 1) + 0.1) # boxplot of the bootstrapped eigenvalues, red line = kaiser
+boxplot(eigs.boot[, 1:10], las = 1, xlab = "Dimension", ylab = "Eigenvalue", col = "beige",
+        main = "Bootstrapped eigenvalues")
+abline(h = 1, col = "red", lty = 2)
 
-pc_selection <- data.frame( #overview of the methods for the report
+pc_selection <- data.frame( # overview of the methods for the report
   Method = c("Kaiser (eigenvalue > 1)", "80% cumulative VAF", "Permutation test", "Bootstrapped Kaiser"),
   PCs = c(k_kaiser, k_vaf80, k_perm, k_kaiser_boot))
 pc_selection
 
-n_pc <- k_perm #chosen number of pcs: the permutation test (most formal), change and motivate if you choose differently
+n_pc <- k_perm # chosen number of pcs: the permutation test (most formal), change and motivate if you choose differently
 
-vaf_boot <- rowSums(eigs_boot[, 1:n_pc, drop = FALSE]) / p #bootstrapped vaf of the chosen pcs
-vaf_ci   <- quantile(vaf_boot, c(0.025, 0.975))           #95% ci
-round(100 * c(VAF = cum_vaf[n_pc], vaf_ci), 1)
+# vaf: bootstrapped proportion of variance explained by the chosen n_pc components
+vaf.boot   <- rowSums(eigs.boot[, 1:n_pc, drop = FALSE]) / p
+perc.alpha <- quantile(vaf.boot, c(0.025, 1 - 0.025)) # 95% percentile interval
+round(100 * c(VAF = cum_vaf[n_pc], perc.alpha), 1)
+hist(vaf.boot, xlab = paste("Proportion of variance explained by", n_pc, "PCs"), las = 1, col = "blue",
+     main = "Bootstrap Confidence Interval", breaks = 20, border = "white")
+abline(v = perc.alpha, col = "green", lwd = 2) # green: 95% interval
+abline(v = cum_vaf[n_pc], col = "red", lwd = 2) # red: estimate on the training data
 
-# 4d. interpretation: which variables load on which pc -> give the pcs a name
-loadings <- pca_model$rotation[, 1:n_pc, drop = FALSE] #weights of the variables in each pc
-round(loadings, 2)
+# 4d. interpretation: loadings, fit per variable and biplots -> give the pcs a name
+print(fitpca$loadings[, 1:n_pc], digits = 2) # weights of the variables in each pc
 
-score_plot   <- data.frame(PC1 = pca_model$x[, 1], PC2 = pca_model$x[, 2], Division = train_data$classification)
-loading_plot <- data.frame(Variable = rownames(pca_model$rotation),
-                           PC1 = pca_model$rotation[, 1], PC2 = pca_model$rotation[, 2])
-arrow_scale <- 0.8 * min(max(abs(score_plot$PC1)) / max(abs(loading_plot$PC1)), #stretch arrows to the scale of the scores
-                         max(abs(score_plot$PC2)) / max(abs(loading_plot$PC2)))
-biplot_pca <- ggplot(score_plot, aes(PC1, PC2)) + #points = institutions, arrows = variables
-  geom_point(aes(color = Division), alpha = 0.5, size = 1) +
-  geom_segment(data = loading_plot, aes(x = 0, y = 0, xend = PC1 * arrow_scale, yend = PC2 * arrow_scale),
-               inherit.aes = FALSE, color = "black", arrow = grid::arrow(length = grid::unit(0.15, "cm"))) +
-  geom_text(data = loading_plot, aes(x = PC1 * arrow_scale, y = PC2 * arrow_scale, label = Variable),
-            inherit.aes = FALSE, size = 2.6, check_overlap = TRUE) +
-  labs(title = "PCA biplot", x = paste0("PC1 (", round(100 * vaf[1], 1), "%)"),
-       y = paste0("PC2 (", round(100 * vaf[2], 1), "%)")) +
-  theme_minimal() + theme(legend.text = element_text(size = 6))
-biplot_pca
+# diagnostics: fit per variable (lecture week 5) = squared correlations between variables and scores
+corpca <- cor(X_pca, fitpca$scores)[, 1:n_pc]
+fit_var <- cbind(corpca, Fit = rowSums(corpca^2))
+round(fit_var, 2)
+
+op <- par(mfrow = c(1, 2)) # biplots as in the lecture; points = institutions, arrows = variables
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("blue", "red"),
+       asp = 1, cex = c(0.4, 0.7), xlabs = rep("o", nrow(X_pca)), main = "Biplot components 1 and 2")
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 2:3, col = c("blue", "red"),
+       asp = 1, cex = c(0.4, 0.7), xlabs = rep("o", nrow(X_pca)), main = "Biplot components 2 and 3")
+par(op)
 
 
 # 5. Principal component regression: log revenue on the n_pc pc scores + classification and sector dummies
 # the pcs summarise the 28 numerical predictors, the dummies add the categorical information
 
-train_scores <- data.frame(pca_model$x[, 1:n_pc, drop = FALSE], #pc scores of the training data
+train_scores <- data.frame(fitpca$scores[, 1:n_pc, drop = FALSE], # pc scores of the training data
                            classification = train_data$classification,
                            sector = train_data$sector,
                            log_revenue = train_data$log_revenue)
-test_scores  <- data.frame(predict(pca_model, newdata = X_test)[, 1:n_pc, drop = FALSE], #test projected on the TRAINING pca
+test_scores  <- data.frame(predict(fitpca, newdata = X_pca_test)[, 1:n_pc, drop = FALSE], # test projected on the TRAINING pca
                            classification = test_data$classification,
                            sector = test_data$sector)
-fit_pcr <- lm(log_revenue ~ ., data = train_scores) #ols on pcs + dummies (lm makes the dummies itself)
+fit_pcr <- lm(log_revenue ~ ., data = train_scores) # ols on pcs + dummies (lm makes the dummies itself)
 summary(fit_pcr)
 
 
-# 6. Ridge regression on all 28 numerical predictors + dummies
+# 6. Ridge regression on all 28 numerical predictors + dummies, as in the lecture code of week 3
 
-form_x  <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
-x_train <- model.matrix(form_x, data = train_data)[, -1] #matrix with dummies, [, -1] drops the intercept column
-x_test  <- model.matrix(form_x, data = test_data)[, -1]
-y_train <- train_data$log_revenue
-y_test  <- test_data$log_revenue
+form_x <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
+y      <- train_data$log_revenue                     # y variable
+X      <- model.matrix(form_x, data = train_data)    # predictor variables (as a matrix, with dummies)
+X      <- X[, -1]                                    # remove intercept column (is fitted by glmnet)
+X_test <- model.matrix(form_x, data = test_data)[, -1]
+X_new  <- model.matrix(form_x, data = prediction_new)[, -1]
 
+# make the numerical columns z-scores, with the means and sds of the TRAINING data (also for test and new)
+x_mean <- colMeans(X[, num_vars])
+x_sd   <- apply(X[, num_vars], 2, sd)
+X[, num_vars]      <- scale(X[, num_vars],      center = x_mean, scale = x_sd)
+X_test[, num_vars] <- scale(X_test[, num_vars], center = x_mean, scale = x_sd)
+X_new[, num_vars]  <- scale(X_new[, num_vars],  center = x_mean, scale = x_sd)
+
+grid <- 10^seq(-5, 2, length.out = 100) # grid of lambdas (wide enough that lambda.min is not at the edge)
+result.ridge <- glmnet(X, y, alpha = 0, lambda = grid, standardize = FALSE) # ridge regression (alpha must be 0 for ridge)
+plot(result.ridge, xvar = "lambda", label = TRUE, las = 1) # coefficient paths: shrink to 0, never exactly 0
+
+# 10-fold cross validation for ridge regression
 set.seed(123)
-cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10) #alpha = 0 -> ridge, 10-fold cv over a grid of lambdas
-c(lambda_min = cv_ridge$lambda.min, lambda_1se = cv_ridge$lambda.1se) #lowest cv error vs simplest model within 1 se
+result.ridge.cv <- cv.glmnet(X, y, alpha = 0, lambda = grid, nfolds = 10, standardize = FALSE)
+print(result.ridge.cv$lambda.min) # best cross validated lambda
+print(result.ridge.cv$lambda.1se) # conservative est. of best lambda (1 stdev)
 
-plot(cv_ridge) #cv error against log(lambda)
-plot(cv_ridge$glmnet.fit, xvar = "lambda") #coefficient paths: shrink to 0, never exactly 0
-abline(v = log(c(cv_ridge$lambda.min, cv_ridge$lambda.1se)), lty = 2)
+# to plot root mean squared error (rmse) to be on the same scale as y:
+result.ridge.cv$cvm  <- result.ridge.cv$cvm^0.5
+result.ridge.cv$cvup <- result.ridge.cv$cvup^0.5
+result.ridge.cv$cvlo <- result.ridge.cv$cvlo^0.5
+plot(result.ridge.cv, ylab = "Root Mean-Squared Error")
 
-ridge_coef <- data.frame(Variable   = rownames(coef(cv_ridge, s = "lambda.min")), #coefficients on log scale
-                         lambda_min = as.numeric(coef(cv_ridge, s = "lambda.min")),
-                         lambda_1se = as.numeric(coef(cv_ridge, s = "lambda.1se")))
-ridge_coef
+# final runs with lambda.min and lambda.1se
+result.ridge.min <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.min, standardize = FALSE)
+result.ridge.1se <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.1se, standardize = FALSE)
+Weights <- cbind(result.ridge.min$beta, result.ridge.1se$beta) # coefficients on log scale (per sd for numerical predictors)
+colnames(Weights) <- c("lambda.min", "lambda.1se")
+round(Weights, digits = 3)
 
 
 # 7. Evaluation on log scale and on revenue scale
 
-rmse <- function(y, yhat) sqrt(mean((y - yhat)^2))
+rmse   <- function(y, yhat) sqrt(mean((y - yhat)^2))
+y_test <- test_data$log_revenue
 
-pred_log <- list( #test predictions of log revenue
+pred_log <- list( # test predictions of log revenue
   "PCR"              = as.numeric(predict(fit_pcr, newdata = test_scores)),
-  "Ridge lambda.min" = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.min")),
-  "Ridge lambda.1se" = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.1se")))
-fit_log <- list( #fitted values on the training set, for the smearing factor
+  "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X_test)),
+  "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X_test)))
+fit_log <- list( # fitted values on the training set, for the smearing factor
   "PCR"              = as.numeric(fitted(fit_pcr)),
-  "Ridge lambda.min" = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.min")),
-  "Ridge lambda.1se" = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.1se")))
+  "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X)),
+  "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X)))
 
 # exp(log prediction) estimates the MEDIAN revenue and underestimates the mean (jensen's inequality)
 # duan's smearing factor = mean(exp(training residuals)); exp(pred) * smear estimates the MEAN revenue
-smear <- sapply(fit_log, function(f) mean(exp(y_train - f)))
+smear <- sapply(fit_log, function(f) mean(exp(y - f)))
 
 rev_test <- test_data$revenue
-eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { #one row per model
+eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { # one row per model
   pl <- pred_log[[m]]
   data.frame(Model = m,
-             RMSE_log = rmse(y_test, pl),                                       #error on log scale (~ relative error)
+             RMSE_log = rmse(y_test, pl),                                  # error on log scale (~ relative error)
              R2_log   = 1 - sum((y_test - pl)^2) / sum((y_test - mean(y_test))^2),
-             RMSE_rev_naive_M = rmse(rev_test, exp(pl)) / 1e6,                  #error in million usd, plain exp()
-             RMSE_rev_smear_M = rmse(rev_test, exp(pl) * smear[m]) / 1e6,       #error in million usd, with smearing
+             RMSE_rev_naive_M = rmse(rev_test, exp(pl)) / 1e6,             # error in million usd, plain exp()
+             RMSE_rev_smear_M = rmse(rev_test, exp(pl) * smear[m]) / 1e6,  # error in million usd, with smearing
              Smearing = smear[m])
 }))
 print(eval_tab, digits = 3, row.names = FALSE)
 
-err_by_class <- data.frame(classification = test_data$classification, #where do the dollar errors come from?
+err_by_class <- data.frame(classification = test_data$classification, # where do the dollar errors come from?
                            abs_err_log = abs(y_test - pred_log[["Ridge lambda.min"]]),
                            abs_err_rev = abs(rev_test - exp(pred_log[["Ridge lambda.min"]]))) %>%
   group_by(classification) %>%
@@ -308,44 +310,29 @@ err_by_class <- data.frame(classification = test_data$classification, #where do 
             share_of_total_abs_err = sum(abs_err_rev)) %>%
   mutate(share_of_total_abs_err = share_of_total_abs_err / sum(share_of_total_abs_err)) %>%
   arrange(desc(MAE_rev_M))
-print(err_by_class, n = Inf) #fbs schools cause most of the dollar error
+print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
-obs_pred <- data.frame(Observed = y_test, PCR = pred_log[["PCR"]], Ridge = pred_log[["Ridge lambda.min"]]) %>%
-  pivot_longer(-Observed, names_to = "Model", values_to = "Predicted")
-observed_predicted <- ggplot(obs_pred, aes(Predicted, Observed)) + #points on the red line = perfect prediction
-  geom_point(alpha = 0.5, size = 1) + geom_abline(color = "red") +
-  facet_wrap(~ Model) +
-  labs(title = "Test set: observed vs predicted log revenue") + theme_minimal()
-observed_predicted
+op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue; points on the red line = perfect prediction
+plot(pred_log[["PCR"]], y_test, pch = 20, col = "grey40", las = 1, main = "PCR",
+     xlab = "Predicted log revenue", ylab = "Observed log revenue")
+abline(0, 1, col = "red")
+plot(pred_log[["Ridge lambda.min"]], y_test, pch = 20, col = "grey40", las = 1, main = "Ridge (lambda.min)",
+     xlab = "Predicted log revenue", ylab = "Observed log revenue")
+abline(0, 1, col = "red")
+par(op)
 
 
-# 8. Predictions for the 10 institutions: refit both models on all 1000 institutions,
-# keeping n_pc and lambda.min from the training stage (the test set has done its job)
+# 8. Predictions for the 10 institutions, with the same models that were evaluated on the test set
 
-full_data <- impute(athletics_new) #all 1000 institutions, na imputed
+new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc, drop = FALSE], # projected on the training pca
+                         classification = prediction_new$classification, sector = prediction_new$sector)
+pl_pcr   <- as.numeric(predict(fit_pcr, newdata = new_scores))     # log revenue predictions
+pl_ridge <- as.numeric(predict(result.ridge.min, newx = X_new))    # X_new was standardised with the training means/sds
 
-pca_full    <- prcomp(full_data[, num_vars], center = TRUE, scale. = TRUE) #pca on all data
-full_scores <- data.frame(pca_full$x[, 1:n_pc, drop = FALSE],
-                          classification = full_data$classification,
-                          sector = full_data$sector,
-                          log_revenue = full_data$log_revenue)
-new_scores  <- data.frame(predict(pca_full, newdata = prediction_new[, num_vars])[, 1:n_pc, drop = FALSE], #10 schools projected
-                          classification = prediction_new$classification, sector = prediction_new$sector)
-fit_pcr_full <- lm(log_revenue ~ ., data = full_scores)
-
-x_full <- model.matrix(form_x, data = full_data)[, -1] #ridge on all data with lambda.min from the training cv
-x_new  <- model.matrix(form_x, data = prediction_new)[, -1]
-ridge_full <- glmnet(x_full, full_data$log_revenue, alpha = 0, lambda = cv_ridge$lambda.min)
-
-pl_pcr      <- as.numeric(predict(fit_pcr_full, newdata = new_scores)) #log revenue predictions
-pl_ridge    <- as.numeric(predict(ridge_full, newx = x_new))
-smear_pcr   <- mean(exp(residuals(fit_pcr_full))) #smearing factors of the refitted models
-smear_ridge <- mean(exp(full_data$log_revenue - as.numeric(predict(ridge_full, newx = x_full))))
-
-pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$classification, #in million usd
-                       rev_PCR_median_M   = exp(pl_pcr) / 1e6,               #median-type: exp(pred)
-                       rev_PCR_mean_M     = exp(pl_pcr) * smear_pcr / 1e6,   #mean-type: exp(pred) * smearing
+pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$classification, # in million usd
+                       rev_PCR_median_M   = exp(pl_pcr) / 1e6,                                  # median-type: exp(pred)
+                       rev_PCR_mean_M     = exp(pl_pcr) * smear["PCR"] / 1e6,                   # mean-type: exp(pred) * smearing
                        rev_Ridge_median_M = exp(pl_ridge) / 1e6,
-                       rev_Ridge_mean_M   = exp(pl_ridge) * smear_ridge / 1e6)
+                       rev_Ridge_mean_M   = exp(pl_ridge) * smear["Ridge lambda.min"] / 1e6)
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
