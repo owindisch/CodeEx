@@ -7,8 +7,8 @@ The code is in `assignment3/assignment3_code.Rmd`, with our own variable names (
 - ridge regression uses `model.matrix()`, z-scores and `glmnet()`/`cv.glmnet()` with a lambda
   grid and an RMSE plot, as in Week 3.
 
-Put the `.Rmd` in the same folder as `permtestPCA.R` (the lecture function, included in the
-repo), `data_783996yw.csv` and `predictions-2.csv`. No `setwd()` is needed.
+Put the `.Rmd` in the same folder as `data_783996yw.csv` and `predictions-2.csv`. The lecture
+function `permtestPCA()` is defined in the setup chunk, so no extra file is needed. No `setwd()` is needed.
 `assignment3/assignment3_revenue.R` is the same code as a plain script (made with
 `knitr::purl`), to run without knitting. Both write the 10 predictions to
 `predictions_output.csv`.
@@ -235,7 +235,8 @@ the permutation test and the bootstrap.
 
 ### 4b. Permutation test
 
-**What the code does:** the lecture function `permtestPCA(X_pca, nTests = 1000)`. It shuffles
+**What the code does:** the lecture function `permtestPCA(X_pca, nTests = 1000)`, defined in the
+setup chunk. It shuffles
 every column (except the first) independently, 1000 times. This destroys the correlations but
 keeps each variable's distribution. It computes the eigenvalues of each shuffled dataset and
 returns the 2.5% and 97.5% quantiles per component, plus a plot. A component is kept when its

@@ -8,10 +8,39 @@ if (!require("gridExtra")) install.packages("gridExtra")
 if (!require("caret"))     install.packages("caret")     # createDataPartition() for the train/test split
 if (!require("boot"))      install.packages("boot")      # bootstrap of the eigenvalues
 if (!require("glmnet"))    install.packages("glmnet")    # ridge regression
-source("permtestPCA.R")                                  # permutation test for pca (lecture week 5)
+
+permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scale.data = TRUE, ...){
+  # permutation test for pca (lecture week 5), defined here so no separate file is needed
+  n <- nrow(X)
+  m <- ncol(X)
+  X <- scale(X, center = center.data, scale = scale.data)
+  res.X      <- prcomp(X)
+  eigs.X     <- res.X$sdev^2
+  eigs.Xperm <- matrix(0, m, nTests)
+  Xperm      <- matrix(0, n, m)
+  Xperm[, 1] <- X[, 1]
+  for (i in 1:nTests){
+    for (j in 2:m) {
+      ind <- sort(runif(n), index.return = TRUE)$ix   # random permutation of the rows
+      Xperm[, j] <- X[ind, j]
+    }
+    eigs.Xperm[, i] <- prcomp(Xperm)$sdev^2
+  }
+  perc.alpha <- matrix(0, m, 2)
+  for (s in 1:m){
+    perc.alpha[s, ] <- quantile(eigs.Xperm[s, ], c(alpha/2, 1 - alpha/2))
+  }
+  plot(1:m, eigs.X, type = "b", col = "red", main = "Permutation test PCA",
+       xlab = "Component", ylab = "Eigenvalue", ...)
+  lines(1:m, perc.alpha[, 1], type = "b", col = "blue")
+  lines(1:m, perc.alpha[, 2], type = "b", col = "blue")
+  legend("topright", inset = .05, c("Observed", "2.5% bound", "97.5% bound"),
+         lty = 1, col = c("red", "blue", "blue"), pch = "o")
+  return(perc.alpha)
+}
 
 # no setwd() needed: knitr runs the chunks in the folder of this .Rmd, so keep the
-# .Rmd, permtestPCA.R and the csv files in the same folder
+# .Rmd and the csv files in the same folder
 athletics  <- read.csv("data_783996yw.csv")
 prediction <- read.csv("predictions-2.csv")
 
