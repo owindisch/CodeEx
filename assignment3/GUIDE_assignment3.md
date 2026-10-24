@@ -8,12 +8,9 @@ The code is in the report file `assignment3/assignment3_report.Rmd`, with our ow
   grid and an RMSE plot, as in Week 3.
 
 **How the report file is built:** all code chunks come first, right after the YAML header,
-with `include=FALSE`. They run silently, so every result exists before the text sections, and
-you can use numbers in the text with inline R, e.g. `` `r round(eval_tab$RMSE_log[1], 3)` ``.
-At the end, the appendix chunk
-`` ```{r appendix-code, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE} `` prints all the
-code once, without running it again. Chunks placed after the text with `include=FALSE` would
-show nothing in the PDF.
+with `include=FALSE`. They run silently and show neither code nor output in the PDF. Every
+result exists before the text sections, so you can use numbers in the text with inline R, e.g.
+`` `r round(eval_tab$RMSE_log[1], 3)` ``. The code is added to the appendix later as text.
 
 Put the `.Rmd` in the same folder as `data_783996yw.csv` and `predictions-2.csv`. The lecture
 function `permtestPCA()` is defined in the setup chunk, so no extra file is needed. No `setwd()` is needed.
@@ -458,8 +455,8 @@ projected on the training PCA and standardised with the training means and sds. 
     can break the figure paths. It is renamed `split`.
   - The last chunk had no closing ```` ``` ````.
   - The title still said Assignment 2.
-  - The appendix chunks had `include=FALSE`, so no code would appear in the PDF. They are now
-    run at the top and printed in the appendix with `ref.label`.
+  - The chunks sat in the appendix, after the text, so inline R in the text couldn't use their
+    results. They now run hidden at the top.
 
 ## Things you may want to change
 - **Number of PCs:** the line `n_pc <- k_perm` in the PCA chunk (Part 4c). With 5 PCs (the

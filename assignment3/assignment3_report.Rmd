@@ -374,6 +374,3 @@ write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
 \newpage
 
 ## Code
-
-```{r appendix-code, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
-```
