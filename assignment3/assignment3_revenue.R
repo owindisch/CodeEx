@@ -47,7 +47,7 @@ save_plot <- function(p, name, w = 7, h = 4.5) {
 # - How skewed is revenue? Which classifications have the largest programs?
 
 athletics <- read.csv(file.path(data_dir, "data_783996yw.csv"))
-new_institutions <- read.csv(file.path(data_dir, "predictions.csv"))
+prediction <- read.csv(file.path(data_dir, "predictions.csv"))
 
 dim(athletics)
 str(athletics)
@@ -133,7 +133,7 @@ transform_vars <- function(d) {
 }
 
 dat  <- athletics %>% fix_structural()
-new_institutions <- new_institutions %>% fix_structural()
+prediction <- prediction %>% fix_structural()
 
 # Remaining (genuine) missing values: only salaries of existing coaches
 colSums(is.na(dat[num_vars]))[colSums(is.na(dat[num_vars])) > 0]
@@ -143,9 +143,9 @@ dat$log_revenue <- log(dat$revenue)
 # Factors with the same levels in the data and in predictions.csv
 dat$classification  <- factor(dat$classification)
 dat$sector          <- factor(dat$sector)
-new_institutions$classification <- factor(new_institutions$classification, levels = levels(dat$classification))
-new_institutions$sector         <- factor(new_institutions$sector, levels = levels(dat$sector))
-stopifnot(!anyNA(new_institutions$classification), !anyNA(new_institutions$sector))
+prediction$classification <- factor(prediction$classification, levels = levels(dat$classification))
+prediction$sector         <- factor(prediction$sector, levels = levels(dat$sector))
+stopifnot(!anyNA(prediction$classification), !anyNA(prediction$sector))
 
 # Skewness before and after the log transform
 skewness_fun <- function(x) {
@@ -161,7 +161,7 @@ skew_tab <- data.frame(
 print(skew_tab, digits = 2, row.names = FALSE)
 
 dat  <- transform_vars(dat)
-new_institutions <- transform_vars(new_institutions)
+prediction <- transform_vars(prediction)
 
 
 ## ============================================================
@@ -186,10 +186,10 @@ impute <- function(d) {
   for (v in num_vars) d[[v]][is.na(d[[v]])] <- train_medians[v]
   d
 }
-train_data       <- impute(train_data)
-test_data        <- impute(test_data)
-new_institutions <- impute(new_institutions)
-stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(new_institutions[num_vars]))
+train_data <- impute(train_data)
+test_data  <- impute(test_data)
+prediction <- impute(prediction)
+stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(prediction[num_vars]))
 
 # Correlations of the predictors with log revenue (exploration only)
 cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE)
@@ -537,13 +537,13 @@ full_scores <- data.frame(pca_full$x[, 1:n_pc, drop = FALSE],
                           classification = full_data$classification,
                           sector = full_data$sector,
                           log_revenue = full_data$log_revenue)
-new_scores  <- data.frame(predict(pca_full, newdata = new_institutions[, num_vars])[, 1:n_pc, drop = FALSE],
-                          classification = new_institutions$classification, sector = new_institutions$sector)
+new_scores  <- data.frame(predict(pca_full, newdata = prediction[, num_vars])[, 1:n_pc, drop = FALSE],
+                          classification = prediction$classification, sector = prediction$sector)
 fit_pcr_full <- lm(log_revenue ~ ., data = full_scores)
 
 # Ridge on all data with the lambda chosen by CV on the training set
 x_full <- model.matrix(form_x, data = full_data)[, -1]
-x_new  <- model.matrix(form_x, data = new_institutions)[, -1]
+x_new  <- model.matrix(form_x, data = prediction)[, -1]
 ridge_full <- glmnet(x_full, full_data$log_revenue, alpha = 0, lambda = cv_ridge$lambda.min)
 
 pl_pcr   <- as.numeric(predict(fit_pcr_full, newdata = new_scores))
@@ -552,7 +552,7 @@ smear_pcr   <- mean(exp(residuals(fit_pcr_full)))
 smear_ridge <- mean(exp(full_data$log_revenue - as.numeric(predict(ridge_full, newx = x_full))))
 
 pred_out <- data.frame(
-  id = new_institutions$id, classification = new_institutions$classification,
+  id = prediction$id, classification = prediction$classification,
   log_rev_PCR = pl_pcr, log_rev_Ridge = pl_ridge,
   rev_PCR_median_M   = exp(pl_pcr) / 1e6,
   rev_PCR_mean_M     = exp(pl_pcr) * smear_pcr / 1e6,
