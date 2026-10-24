@@ -3,7 +3,6 @@
 ```{r data setup, include=FALSE}
 library(tidyverse)
 library(glmnet)
-library(pls)
 library(boot)
 library(gridExtra)
 
@@ -138,24 +137,24 @@ round(cor_tab, 2) #salaries and coaches correlate strongly: in eada revenue must
 ```{r pca, include=FALSE}
 
 # 4. PCA on the 28 numerical predictors (training data, standardised)
+# the dummies are left out: pca on 0/1 variables is hard to interpret, they return in the pcr
 
 X_train <- train_data[, num_vars]
 X_test  <- test_data[, num_vars]
-p       <- ncol(X_train)
+p       <- ncol(X_train) #28 variables
 
 pca_model   <- prcomp(X_train, center = TRUE, scale. = TRUE) #scale = pca on the correlation matrix (different units)
 eigenvalues <- pca_model$sdev^2              #variance of each component
-vaf         <- eigenvalues / sum(eigenvalues) #variance accounted for
+vaf         <- eigenvalues / sum(eigenvalues) #variance accounted for (share)
 cum_vaf     <- cumsum(vaf)                    #cumulative vaf
 pca_summary <- data.frame(PC = seq_along(eigenvalues), Eigenvalue = eigenvalues, VAF = vaf, CumulativeVAF = cum_vaf)
 round(pca_summary, 3)
 
-# 4a. four simple criteria
-k_kaiser   <- sum(eigenvalues > 1)      #kaiser: eigenvalue > 1
-k_jolliffe <- sum(eigenvalues > 0.7)    #jolliffe: eigenvalue > 0.7
-k_vaf80    <- which(cum_vaf >= 0.80)[1] #first pc where 80% is reached
+# 4a. simple rules as a reference: kaiser and vaf (both are tested with the bootstrap below) + scree plot
+k_kaiser <- sum(eigenvalues > 1)      #kaiser: a pc must explain more than one original variable
+k_vaf80  <- which(cum_vaf >= 0.80)[1] #first pc where 80% of the variance is reached
 
-scree <- ggplot(pca_summary, aes(PC, Eigenvalue)) + #scree plot: look for the elbow
+scree <- ggplot(pca_summary, aes(PC, Eigenvalue)) + #scree plot: look for the elbow, red line = kaiser
   geom_line(color = "steelblue") + geom_point(color = "steelblue") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
   scale_x_continuous(breaks = seq_len(p)) +
@@ -164,17 +163,17 @@ scree <- ggplot(pca_summary, aes(PC, Eigenvalue)) + #scree plot: look for the el
 scree
 
 # 4b. permutation test: shuffle each column separately -> no correlation left, pcs only reflect chance
+# a pc is meaningful if it explains more variance than 95% of the shuffled datasets
 set.seed(123)
 perm_vaf <- t(replicate(1000, {
   X_perm <- apply(X_train, 2, sample)
   ev <- prcomp(X_perm, center = TRUE, scale. = TRUE)$sdev^2
   ev / sum(ev)
-}))
-perm_q95 <- apply(perm_vaf, 2, quantile, probs = 0.95)                #95% chance level per pc
-perm_p   <- sapply(seq_len(p), function(j) mean(perm_vaf[, j] >= vaf[j])) #p-value per pc
-perm_tab <- data.frame(PC = seq_len(p), VAF = vaf, Perm95 = perm_q95, p_value = perm_p)
-round(perm_tab, 3)
-k_perm <- which(vaf <= perm_q95)[1] - 1 #keep pcs up to the first non-significant one
+})) #1000 x 28 matrix: vaf of each pc in each shuffled dataset
+perm_q95 <- apply(perm_vaf, 2, quantile, probs = 0.95) #95% chance level per pc
+perm_tab <- data.frame(PC = seq_len(p), VAF = vaf, Perm95 = perm_q95)
+round(head(perm_tab, 8), 3)
+k_perm <- which(vaf <= perm_q95)[1] - 1 #keep pcs up to the first one that is not above chance
 
 permutation <- ggplot(perm_tab, aes(PC)) + #blue above red = keep
   geom_line(aes(y = VAF, color = "Observed")) + geom_point(aes(y = VAF, color = "Observed")) +
@@ -186,18 +185,18 @@ permutation <- ggplot(perm_tab, aes(PC)) + #blue above red = keep
   theme_minimal()
 permutation
 
-# 4c. bootstrap of kaiser's rule and of vaf
-my_boot_pca <- function(x, ind) { #pca on the resampled rows, return the eigenvalues
+# 4c. bootstrap of kaiser's rule and of vaf: resample institutions, redo the pca, store the eigenvalues
+my_boot_pca <- function(x, ind) { #pca on the resampled rows (ind), return the eigenvalues
   prcomp(x[ind, ], center = TRUE, scale. = TRUE)$sdev^2
 }
 set.seed(123)
 fit_boot  <- boot(data = X_train, statistic = my_boot_pca, R = 1000)
-eigs_boot <- fit_boot$t #1000 x p matrix of bootstrapped eigenvalues
+eigs_boot <- fit_boot$t #1000 x 28 matrix of bootstrapped eigenvalues
 
 kaiser_boot <- data.frame(PC = seq_len(p), Eigenvalue = eigenvalues, #95% ci per eigenvalue
                           Lower = apply(eigs_boot, 2, quantile, 0.025),
                           Upper = apply(eigs_boot, 2, quantile, 0.975))
-kaiser_boot$Significant <- kaiser_boot$Lower > 1 #significant if the whole ci is above 1
+kaiser_boot$Significant <- kaiser_boot$Lower > 1 #significantly > 1 if the whole ci is above 1
 head(kaiser_boot, 8)
 k_kaiser_boot <- which(!kaiser_boot$Significant)[1] - 1
 
@@ -209,30 +208,20 @@ kaiserboot <- ggplot(head(kaiser_boot, 10), aes(PC, Eigenvalue)) +
   theme_minimal()
 kaiserboot
 
-n_pc <- k_perm #chosen number of pcs (permutation test), change and motivate if you choose differently
-
-vaf_boot <- rowSums(eigs_boot[, 1:n_pc, drop = FALSE]) / p #bootstrapped vaf of the chosen pcs
-vaf_ci   <- quantile(vaf_boot, c(0.025, 0.975))
-round(100 * c(VAF = cum_vaf[n_pc], vaf_ci), 1)
-
-vaf_each_boot <- eigs_boot / p #bootstrap ci for the vaf of each chosen pc
-vaf_each_ci <- data.frame(PC = 1:n_pc, VAF = vaf[1:n_pc],
-                          Lower = apply(vaf_each_boot[, 1:n_pc, drop = FALSE], 2, quantile, 0.025),
-                          Upper = apply(vaf_each_boot[, 1:n_pc, drop = FALSE], 2, quantile, 0.975))
-round(vaf_each_ci, 3)
-
-pc_selection <- data.frame( #overview of all methods for the report
-  Method = c("Kaiser (eigenvalue > 1)", "Jolliffe (eigenvalue > 0.7)", "80% cumulative VAF",
-             "Permutation test", "Bootstrapped Kaiser"),
-  PCs = c(k_kaiser, k_jolliffe, k_vaf80, k_perm, k_kaiser_boot))
+pc_selection <- data.frame( #overview of the methods for the report
+  Method = c("Kaiser (eigenvalue > 1)", "80% cumulative VAF", "Permutation test", "Bootstrapped Kaiser"),
+  PCs = c(k_kaiser, k_vaf80, k_perm, k_kaiser_boot))
 pc_selection
 
-# 4d. interpretation
+n_pc <- k_perm #chosen number of pcs: the permutation test (most formal), change and motivate if you choose differently
+
+vaf_boot <- rowSums(eigs_boot[, 1:n_pc, drop = FALSE]) / p #bootstrapped vaf of the chosen pcs
+vaf_ci   <- quantile(vaf_boot, c(0.025, 0.975))           #95% ci
+round(100 * c(VAF = cum_vaf[n_pc], vaf_ci), 1)
+
+# 4d. interpretation: which variables load on which pc -> give the pcs a name
 loadings <- pca_model$rotation[, 1:n_pc, drop = FALSE] #weights of the variables in each pc
 round(loadings, 2)
-var_pc_cor  <- sweep(loadings, 2, pca_model$sdev[1:n_pc], "*") #correlation variable-pc = loading * sd of pc
-communality <- rowSums(var_pc_cor^2) #share of each variable explained by the chosen pcs
-round(cbind(var_pc_cor, Communality = communality), 2)
 
 score_plot   <- data.frame(PC1 = pca_model$x[, 1], PC2 = pca_model$x[, 2], Division = train_data$classification)
 loading_plot <- data.frame(Variable = rownames(pca_model$rotation),
@@ -253,35 +242,23 @@ biplot_pca
 
 ```{r pcr, include=FALSE}
 
-# 5. Principal component regression
+# 5. Principal component regression: log revenue on the n_pc pc scores + classification and sector dummies
+# the pcs summarise the 28 numerical predictors, the dummies add the categorical information
 
-pcr_data <- train_data[, c("log_revenue", num_vars)] #variant a: pcr on the numerical predictors
-set.seed(123)
-fit_pcr <- pcr(log_revenue ~ ., data = pcr_data, scale = TRUE, validation = "CV", segments = 10) #10-fold cv for every number of pcs
-summary(fit_pcr)
-
-cv_rmsep <- RMSEP(fit_pcr, estimate = "CV")$val[1, 1, -1] #cv error per number of pcs (without intercept-only model)
-k_cv     <- which.min(cv_rmsep)                           #number of pcs with the lowest cv error
-k_cv_1se <- selectNcomp(fit_pcr, method = "onesigma")     #smallest number within one se
-c(k_cv = k_cv, k_cv_1se = k_cv_1se)
-
-validationplot(fit_pcr, val.type = "RMSEP", main = "PCR: cross-validated RMSEP (log revenue)")
-abline(v = n_pc, lty = 2, col = "red") #red line = chosen n_pc
-
-train_scores <- data.frame(pca_model$x[, 1:n_pc, drop = FALSE], #variant b: pc scores + dummies
+train_scores <- data.frame(pca_model$x[, 1:n_pc, drop = FALSE], #pc scores of the training data
                            classification = train_data$classification,
                            sector = train_data$sector,
                            log_revenue = train_data$log_revenue)
-test_scores  <- data.frame(predict(pca_model, newdata = X_test)[, 1:n_pc, drop = FALSE], #test projected on the training pca
+test_scores  <- data.frame(predict(pca_model, newdata = X_test)[, 1:n_pc, drop = FALSE], #test projected on the TRAINING pca
                            classification = test_data$classification,
                            sector = test_data$sector)
-fit_pcr_dum <- lm(log_revenue ~ ., data = train_scores)
-summary(fit_pcr_dum)
+fit_pcr <- lm(log_revenue ~ ., data = train_scores) #ols on pcs + dummies (lm makes the dummies itself)
+summary(fit_pcr)
 ```
 
 ```{r ridge, include=FALSE}
 
-# 6. Ridge regression
+# 6. Ridge regression on all 28 numerical predictors + dummies
 
 form_x  <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
 x_train <- model.matrix(form_x, data = train_data)[, -1] #matrix with dummies, [, -1] drops the intercept column
@@ -291,7 +268,7 @@ y_test  <- test_data$log_revenue
 
 set.seed(123)
 cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10) #alpha = 0 -> ridge, 10-fold cv over a grid of lambdas
-c(lambda_min = cv_ridge$lambda.min, lambda_1se = cv_ridge$lambda.1se)
+c(lambda_min = cv_ridge$lambda.min, lambda_1se = cv_ridge$lambda.1se) #lowest cv error vs simplest model within 1 se
 
 plot(cv_ridge) #cv error against log(lambda)
 plot(cv_ridge$glmnet.fit, xvar = "lambda") #coefficient paths: shrink to 0, never exactly 0
@@ -307,45 +284,31 @@ ridge_coef
 
 # 7. Evaluation on log scale and on revenue scale
 
-rmse  <- function(y, yhat) sqrt(mean((y - yhat)^2))
-mae   <- function(y, yhat) mean(abs(y - yhat))
-mdape <- function(y, yhat) median(abs(y - yhat) / y) #median absolute percentage error
+rmse <- function(y, yhat) sqrt(mean((y - yhat)^2))
 
 pred_log <- list( #test predictions of log revenue
-  "PCR (numerical, n_pc)"     = as.numeric(predict(fit_pcr, newdata = test_data, ncomp = n_pc)),
-  "PCR (numerical, CV ncomp)" = as.numeric(predict(fit_pcr, newdata = test_data, ncomp = k_cv)),
-  "PCR + dummies"             = as.numeric(predict(fit_pcr_dum, newdata = test_scores)),
-  "Ridge lambda.min"          = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.min")),
-  "Ridge lambda.1se"          = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.1se")))
+  "PCR"              = as.numeric(predict(fit_pcr, newdata = test_scores)),
+  "Ridge lambda.min" = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.min")),
+  "Ridge lambda.1se" = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.1se")))
 fit_log <- list( #fitted values on the training set, for the smearing factor
-  "PCR (numerical, n_pc)"     = as.numeric(predict(fit_pcr, ncomp = n_pc)),
-  "PCR (numerical, CV ncomp)" = as.numeric(predict(fit_pcr, ncomp = k_cv)),
-  "PCR + dummies"             = as.numeric(fitted(fit_pcr_dum)),
-  "Ridge lambda.min"          = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.min")),
-  "Ridge lambda.1se"          = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.1se")))
-smear <- sapply(fit_log, function(f) mean(exp(y_train - f))) #duan's smearing factor: exp(pred) * smear = mean revenue
+  "PCR"              = as.numeric(fitted(fit_pcr)),
+  "Ridge lambda.min" = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.min")),
+  "Ridge lambda.1se" = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.1se")))
+
+# exp(log prediction) estimates the MEDIAN revenue and underestimates the mean (jensen's inequality)
+# duan's smearing factor = mean(exp(training residuals)); exp(pred) * smear estimates the MEAN revenue
+smear <- sapply(fit_log, function(f) mean(exp(y_train - f)))
 
 rev_test <- test_data$revenue
 eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { #one row per model
   pl <- pred_log[[m]]
   data.frame(Model = m,
-             RMSE_log = rmse(y_test, pl),
-             MAE_log  = mae(y_test, pl),
+             RMSE_log = rmse(y_test, pl),                                       #error on log scale (~ relative error)
              R2_log   = 1 - sum((y_test - pl)^2) / sum((y_test - mean(y_test))^2),
-             RMSE_rev_naive_M = rmse(rev_test, exp(pl)) / 1e6,
-             RMSE_rev_smear_M = rmse(rev_test, exp(pl) * smear[m]) / 1e6,
-             MAE_rev_naive_M  = mae(rev_test, exp(pl)) / 1e6,
-             MdAPE_naive      = mdape(rev_test, exp(pl)),
-             Smearing         = smear[m])
+             RMSE_rev_naive_M = rmse(rev_test, exp(pl)) / 1e6,                  #error in million usd, plain exp()
+             RMSE_rev_smear_M = rmse(rev_test, exp(pl) * smear[m]) / 1e6,       #error in million usd, with smearing
+             Smearing = smear[m])
 }))
-eval_tab <- rbind(eval_tab, data.frame( #benchmark: everyone gets the training mean
-  Model = "Null (mean log revenue)",
-  RMSE_log = rmse(y_test, mean(y_train)), MAE_log = mae(y_test, mean(y_train)), R2_log = 0,
-  RMSE_rev_naive_M = rmse(rev_test, exp(mean(y_train))) / 1e6,
-  RMSE_rev_smear_M = rmse(rev_test, mean(train_data$revenue)) / 1e6,
-  MAE_rev_naive_M  = mae(rev_test, exp(mean(y_train))) / 1e6,
-  MdAPE_naive      = mdape(rev_test, exp(mean(y_train))),
-  Smearing = NA))
 print(eval_tab, digits = 3, row.names = FALSE)
 
 err_by_class <- data.frame(classification = test_data$classification, #where do the dollar errors come from?
@@ -358,7 +321,7 @@ err_by_class <- data.frame(classification = test_data$classification, #where do 
   arrange(desc(MAE_rev_M))
 print(err_by_class, n = Inf) #fbs schools cause most of the dollar error
 
-obs_pred <- data.frame(Observed = y_test, PCR = pred_log[["PCR + dummies"]], Ridge = pred_log[["Ridge lambda.min"]]) %>%
+obs_pred <- data.frame(Observed = y_test, PCR = pred_log[["PCR"]], Ridge = pred_log[["Ridge lambda.min"]]) %>%
   pivot_longer(-Observed, names_to = "Model", values_to = "Predicted")
 observed_predicted <- ggplot(obs_pred, aes(Predicted, Observed)) + #points on the red line = perfect prediction
   geom_point(alpha = 0.5, size = 1) + geom_abline(color = "red") +
@@ -369,30 +332,30 @@ observed_predicted
 
 ```{r predictions, include=FALSE}
 
-# 8. Predictions for the 10 institutions
+# 8. Predictions for the 10 institutions: refit both models on all 1000 institutions,
+# keeping n_pc and lambda.min from the training stage (the test set has done its job)
 
 full_data <- impute(athletics_new) #all 1000 institutions, na imputed
 
-pca_full    <- prcomp(full_data[, num_vars], center = TRUE, scale. = TRUE) #pcr + dummies refitted on all data
+pca_full    <- prcomp(full_data[, num_vars], center = TRUE, scale. = TRUE) #pca on all data
 full_scores <- data.frame(pca_full$x[, 1:n_pc, drop = FALSE],
                           classification = full_data$classification,
                           sector = full_data$sector,
                           log_revenue = full_data$log_revenue)
-new_scores  <- data.frame(predict(pca_full, newdata = prediction_new[, num_vars])[, 1:n_pc, drop = FALSE],
+new_scores  <- data.frame(predict(pca_full, newdata = prediction_new[, num_vars])[, 1:n_pc, drop = FALSE], #10 schools projected
                           classification = prediction_new$classification, sector = prediction_new$sector)
 fit_pcr_full <- lm(log_revenue ~ ., data = full_scores)
 
-x_full <- model.matrix(form_x, data = full_data)[, -1] #ridge refitted on all data with lambda.min from the training cv
+x_full <- model.matrix(form_x, data = full_data)[, -1] #ridge on all data with lambda.min from the training cv
 x_new  <- model.matrix(form_x, data = prediction_new)[, -1]
 ridge_full <- glmnet(x_full, full_data$log_revenue, alpha = 0, lambda = cv_ridge$lambda.min)
 
 pl_pcr      <- as.numeric(predict(fit_pcr_full, newdata = new_scores)) #log revenue predictions
 pl_ridge    <- as.numeric(predict(ridge_full, newx = x_new))
-smear_pcr   <- mean(exp(residuals(fit_pcr_full)))
+smear_pcr   <- mean(exp(residuals(fit_pcr_full))) #smearing factors of the refitted models
 smear_ridge <- mean(exp(full_data$log_revenue - as.numeric(predict(ridge_full, newx = x_full))))
 
 pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$classification, #in million usd
-                       log_rev_PCR = pl_pcr, log_rev_Ridge = pl_ridge,
                        rev_PCR_median_M   = exp(pl_pcr) / 1e6,               #median-type: exp(pred)
                        rev_PCR_mean_M     = exp(pl_pcr) * smear_pcr / 1e6,   #mean-type: exp(pred) * smearing
                        rev_Ridge_median_M = exp(pl_ridge) / 1e6,

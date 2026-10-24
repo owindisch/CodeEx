@@ -1,13 +1,25 @@
 # Assignment 3 – Revenue of US college athletics programs: step-by-step guide
 
-There are two versions of the same code. Both give exactly the same results:
+The code is in `assignment3/assignment3_code.Rmd`, with our own variable names (`athletics_new`,
+`prediction_new`, `fixed_coaches()`, …). Put the `.Rmd` in the same folder as `data_783996yw.csv`
+and `predictions-2.csv`; no `setwd()` is needed. Plots are stored as objects (`revenue`,
+`logrevenue`, `scree`, …) and printed. `assignment3/assignment3_revenue.R` is the same code as
+a plain script (made with `knitr::purl`), to run without knitting. Both write the 10 predictions
+to `predictions_output.csv`.
 
-| File | Use it for |
+**What the assignment requires, and where it is in the code**
+
+| Requirement | Where |
 |---|---|
-| `assignment3/assignment3_code.Rmd` | **The report.** Code chunks with our own variable names (`athletics_new`, `prediction_new`, `fixed_coaches()`, …). Put the `.Rmd` in the same folder as `data_783996yw.csv` and `predictions-2.csv`; no `setwd()` is needed. Plots are stored as objects (`revenue`, `logrevenue`, `scree`, …) and printed. |
-| `assignment3/assignment3_revenue.R` | A standalone script (run with `Rscript assignment3/assignment3_revenue.R`, about 25 s). It saves the figures to `assignment3/figures/`. It uses the older names (`dat`, `fix_structural()`, …). |
+| PCA regression model | PCA chunk (Part 4) + PCR chunk (Part 5) |
+| Permutation test | Part 4b |
+| Bootstrap of Kaiser's rule and of the VAF | Part 4c |
+| Name and interpret the components | Part 4d (loadings + biplot) |
+| Ridge regression | Part 6 |
+| Log revenue vs revenue evaluation | Part 7 |
+| Predictions for `predictions-2.csv` | Part 8 |
 
-Both write the 10 predictions to `predictions_output.csv`.
+Everything else was left out, so that everything in the code can be explained in the report.
 
 **Names in the `.Rmd`**
 
@@ -20,9 +32,10 @@ Both write the 10 predictions to `predictions_output.csv`.
 | `logged_vars()` | `log1p()` of the counts and salaries |
 | `train_data`, `test_data` | 80/20 split of `athletics_new`, after `impute()` |
 | `full_data` | All of `athletics_new` after `impute()`, for the final predictions |
+| `fit_pcr`, `cv_ridge` | The PCR model and the ridge model (training data) |
 | `revenue`, `logrevenue`, `classifications`, `scree`, `permutation`, `kaiserboot`, `biplot_pca`, `observed_predicted` | The ggplot figures |
 
-The parts below follow the code. Each part has **what the code does**, **guiding questions**
+The parts below follow the code chunks. Each part has **what the code does**, **guiding questions**
 (like the questions in Assignments 1 and 2), and **what came out** when I ran it (seed 123,
 80/20 split). All numbers depend on the seed and on your choices, so rerun the script before
 you copy anything into the report.
@@ -76,7 +89,7 @@ higher revenue"). Do not write "salaries determine revenue".
 
 ## Part 1 – Load and inspect
 
-**What the code does:** it reads the data (1000 × 32) and `predictions.csv` (10 × 31), counts
+**What the code does:** it reads the data (1000 × 32) and `predictions-2.csv` (10 × 31), counts
 the NaNs, tabulates the categorical variables, and plots revenue, log revenue, and log revenue
 by classification.
 
@@ -186,19 +199,20 @@ PCA runs on the **28 numerical predictors**, standardised (`scale. = TRUE`), on 
 data. Revenue and the dummies are left out: revenue because PCA must use the predictors only,
 the dummies because PCA on 0/1 variables is hard to interpret.
 
-### 4a. The four simple criteria
+### 4a. Simple rules as a reference
 
-**Note:** check your lecture slides for the exact four criteria. The script uses the usual ones.
+Kaiser's rule and the VAF are the two rules the assignment asks us to bootstrap, so we first
+apply them in their plain form, together with the scree plot:
 
-| Criterion | Number of PCs |
+| Rule | Number of PCs |
 |---|---|
-| Kaiser (eigenvalue > 1) | 6 |
-| Jolliffe (eigenvalue > 0.7) | 9 |
+| Kaiser (eigenvalue > 1): a PC must explain more than one original variable | 6 |
 | 80% cumulative VAF | 7 |
 | Scree plot elbow (`scree`) | ≈ 2–3 (λ₁ = 13.8, λ₂ = 2.8, λ₃ = 1.6, then flat around 1) |
 
-**Guiding questions:** Do the criteria agree? Why is Kaiser close to arbitrary here?
-PCs 4–6 have eigenvalues of 1.2, 1.1 and 1.0, so they sit right at the threshold.
+**Guiding questions:** Do the rules agree? Why is Kaiser close to arbitrary here?
+PCs 4–6 have eigenvalues of 1.2, 1.1 and 1.0, so they sit right at the threshold. The 80% cutoff
+is a convention, not a test. This motivates the permutation test and the bootstrap.
 
 ### 4b. Permutation test
 
@@ -212,22 +226,27 @@ and compares the observed VAF of each PC with the 95th percentile of the permute
 - Why is the test stricter than Kaiser? Even with zero correlation, the first eigenvalues of
   a sample are larger than 1 by chance. Kaiser ignores this.
 
-**Result:** PCs 1–3 are significant (p < 0.001). PC4 is not: its VAF is 0.043, below the
-null's 95th percentile of 0.045 (p = 0.93). **→ 3 PCs.**
+**Result:** PCs 1–3 explain more than the 95% chance level. PC4 does not: its VAF is 0.043,
+below the chance level of 0.045. **→ 3 PCs.**
 
 ### 4c. Bootstrap of Kaiser's rule and of the VAF
 
 **What the code does:** 1000 bootstrap samples of the training rows. It reruns the PCA on
 each one, stores the eigenvalues, and builds percentile CIs.
 - *Kaiser:* a PC counts as significant when the **lower** bound of its 95% CI is above 1.
-- *VAF:* it builds a CI for the variance explained by the chosen number of PCs, and one for
-  each PC.
+- *VAF:* it builds a CI for the variance explained by the chosen number of PCs.
 
 **Results**
 - Eigenvalue CIs: PC4 [1.14, 1.44] and PC5 [1.02, 1.22] are above 1. PC6 [0.92, 1.08]
   contains 1. **→ the bootstrapped Kaiser rule gives 5 PCs.**
-- The VAF of 3 PCs is 65.0%, with a 95% CI of [63.8%, 67.0%]. PC1 alone explains 49.4%
-  [47.9%, 51.1%].
+- The VAF of 3 PCs is 65.0%, with a 95% CI of [63.8%, 67.0%].
+
+| Method | PCs |
+|---|---|
+| Kaiser (eigenvalue > 1) | 6 |
+| 80% cumulative VAF | 7 |
+| Permutation test | **3** |
+| Bootstrapped Kaiser | 5 |
 
 **Guiding questions**
 - Why do the permutation test (3) and the bootstrapped Kaiser rule (5) disagree? They test
@@ -236,43 +255,40 @@ each one, stores the eigenvalues, and builds percentile CIs.
   is 1/28 = 3.6%, and that threshold is lower than the chance level.
 - The bootstrap eigenvalues of the leading PCs are biased upward (resampling duplicates rows).
   Does that matter for a borderline PC like PC5?
-- Which number do you choose, and why? The script uses **3** (`n_pc <- k_perm`). You can
+- Which number do you choose, and why? The code uses **3** (`n_pc <- k_perm`). You can
   change that line.
 
 ### 4d. Naming the components
 
-**What the code does:** it prints the loadings, the variable–PC correlations
-(loading × sd of the PC) and the communalities (the share of each variable explained by the
-chosen PCs). It also draws a biplot coloured by classification (`biplot_pca`).
+**What the code does:** it prints the loadings (the weight of each variable in each PC) and
+draws a biplot coloured by classification (`biplot_pca`).
 
 **Suggested interpretation (check it against your own loadings and biplot):**
 
 | PC | VAF | Loadings | Possible name |
 |---|---|---|---|
-| PC1 | 49% | All loadings positive. Correlations 0.85–0.94 with athletes, teams and coaches | **Program size / scale** |
+| PC1 | 49% | All loadings positive, largest for athletes, teams and coaches | **Program size / scale** |
 | PC2 | 10% | + teams, men's soccer, head coaches. − enrollment, all salaries, full-time share | **Breadth of sports vs. professionalisation (pay per coach)** |
 | PC3 | 6% | + enrollment, track, other sports, female head-coach share. − basketball, baseball, softball, assistant salaries | **Large-campus Olympic sports vs. small-college team sports** |
 
 **Guiding questions**
-- Which variables are badly explained by 3 PCs? `hc_female_share` has a communality of 0.13,
-  `partic_football` 0.36 and `partic_baseball` 0.39. Is it a problem that football, the main
-  revenue driver at FBS schools, is poorly represented?
+- Which variables have small loadings on all 3 PCs? `hc_female_share` and `partic_football`
+  hardly appear. Is it a problem that football, the main revenue driver at FBS schools, is
+  poorly represented?
 - In the biplot, do the divisions (FBS, NCAA III, NJCAA) form visible clusters?
 
 ## Part 5 – Principal component regression
 
-**What the code does**
-- **Variant A:** `pls::pcr(log_revenue ~ ., scale = TRUE, validation = "CV")` on the 28
-  numerical predictors, evaluated at `n_pc` and at the CV-optimal number of components.
-- **Variant B:** `lm(log_revenue ~ PC1 + PC2 + PC3 + classification + sector)`. The PC scores
-  come from the training PCA, and the test scores are projected with that same PCA.
+**What the code does:** `lm(log_revenue ~ PC1 + PC2 + PC3 + classification + sector)`. The PC
+scores come from the training PCA. The test data are projected with that **same** training
+PCA (`predict(pca_model, newdata = X_test)`), so train and test use identical components.
 
 **Guiding questions**
-- CV is lowest at about 11–12 components, while the PCA criteria say 3. Why? PCA never looks
-  at revenue: the directions with the most variance in X are not necessarily the directions
-  that predict y. This is the classic weakness of PCR (and the motivation for PLS).
-- Why should the dummies enter separately rather than through the PCA?
-- Variant B has R² = 0.945 on the training data. Compare it with Variant A.
+- Why do the dummies enter separately instead of through the PCA? (PCA on 0/1 variables is
+  hard to interpret, and the division is the strongest single predictor of revenue.)
+- The model has R² = 0.945 on the training data. How does it compare on the test data (Part 7)?
+- PCA never looks at revenue: the directions with the most variance in X are not necessarily
+  the ones that predict revenue best. What does that mean for PCR compared to ridge?
 
 ## Part 6 – Ridge regression
 
@@ -306,14 +322,11 @@ the revenue scale. It back-transforms in two ways:
 
 It also breaks down the revenue-scale error by classification.
 
-| Model | RMSE log | R² log | RMSE rev (naive, M$) | RMSE rev (smearing, M$) | MdAPE |
-|---|---|---|---|---|---|
-| PCR, 3 PCs | 0.665 | 0.835 | 19.7 | 16.7 | 44% |
-| PCR, CV-optimal ncomp | 0.581 | 0.874 | 17.8 | 15.3 | 35% |
-| **PCR (3 PCs) + dummies** | 0.462 | 0.920 | **10.2** | **9.3** | **23%** |
-| **Ridge λ_min** | **0.458** | **0.922** | 10.9 | 9.7 | 26% |
-| Ridge λ_1se | 0.487 | 0.911 | 15.4 | 13.9 | 29% |
-| Null (mean) | 1.641 | 0 | 34.4 | 32.9 | 87% |
+| Model | RMSE log | R² log | RMSE rev (naive, M$) | RMSE rev (smearing, M$) |
+|---|---|---|---|---|
+| PCR (3 PCs + dummies) | 0.462 | 0.920 | **10.2** | **9.3** |
+| Ridge λ_min | **0.458** | **0.922** | 10.9 | 9.7 |
+| Ridge λ_1se | 0.487 | 0.911 | 15.4 | 13.9 |
 
 **Discussion points**
 1. **Jensen's inequality:** E[revenue] = E[exp(log revenue)] > exp(E[log revenue]). Plain
@@ -323,22 +336,21 @@ It also breaks down the revenue-scale error by classification.
    error, whatever the size of the program. On the revenue scale, squared errors are dominated
    by the largest programs: **13 FBS schools (6.5% of the test set) cause 59% of the total
    absolute error.**
-3. **The model ranking changes:** Ridge λ_min is best on the log scale, while PCR + dummies
-   is best on the revenue scale. The models were fitted to minimise log errors, so they are
+3. **The model ranking changes:** Ridge λ_min is best on the log scale, while PCR is best on
+   the revenue scale. The models were fitted to minimise log errors, so they are
    not optimal for dollar errors.
 4. Which metric fits the client? An association with programs of every size probably cares
-   about *relative* errors, so the log RMSE or a median absolute percentage error makes sense.
+   about *relative* errors, so the log RMSE makes sense.
    For budget totals, the dollar error (with the smearing correction) matters.
-5. Optional: plot the error by revenue decile, as in Assignment 2 Q14.
 
 ## Part 8 – Predictions for the 10 institutions
 
 **What the code does:** it refits both final models on all 1000 institutions, keeping the
 tuning choices from the training stage (`n_pc` = 3 and λ_min). It applies the same
-preprocessing to `predictions.csv` and reports log predictions, a *median-type* revenue
-(`exp`) and a *mean-type* revenue (smearing).
+preprocessing to `predictions-2.csv` and reports a *median-type* revenue
+(`exp`) and a *mean-type* revenue (smearing), in million USD.
 
-| id | Classification | PCR + dummies (median / mean, M$) | Ridge (median / mean, M$) |
+| id | Classification | PCR (median / mean, M$) | Ridge (median / mean, M$) |
 |---|---|---|---|
 | 1 | NCAA D-I FBS | 113.8 / 122.9 | 116.6 / 125.4 |
 | 2 | NCAA D-I FCS | 18.0 / 19.4 | 18.3 / 19.7 |
@@ -379,14 +391,13 @@ preprocessing to `predictions.csv` and reports log predictions, a *median-type* 
   - `logged_vars()` was defined but never applied.
   - `setwd()` inside a chunk is reset after that chunk, so it was removed.
 
-## Things you may want to change or add
-- **Number of PCs:** the line `n_pc <- k_perm` in the PCA chunk (Part 4c). With 5 PCs (the bootstrapped
-  Kaiser rule), rerun and compare.
+## Things you may want to change
+- **Number of PCs:** the line `n_pc <- k_perm` in the PCA chunk (Part 4c). With 5 PCs (the
+  bootstrapped Kaiser rule), rerun and compare.
 - **Rare levels:** merge NCCAA Division I (2 schools) and Independent (7) into "Other", and
   the two small sectors as well, if you think their dummies are unstable.
-- **OLS benchmark:** add `lm(log_revenue ~ ., ...)` as a reference, as in Assignment 2.
 - **Report structure** (as in Assignment 1): Introduction → Data (NaN treatment, log
-  transformation) → Methods (PCA plus criteria, permutation test, bootstrap; PCR; ridge;
+  transformation) → Methods (PCA with the permutation test and bootstrap; PCR; ridge;
   back-transformation) → Results → Discussion/Conclusion. Tables of loadings, coefficients and
   bootstrap CIs go in the appendix.
 
