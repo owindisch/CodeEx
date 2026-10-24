@@ -22,6 +22,9 @@
 ## PART 0: SETUP
 ## ============================================================
 
+# Packages: dplyr/tidyr for data handling, ggplot2 for figures,
+# glmnet for ridge regression, pls for principal component regression,
+# boot for the bootstrap.
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -29,10 +32,12 @@ library(glmnet)
 library(pls)
 library(boot)
 
+# Folder with the data files, and a subfolder for the figures
 data_dir <- "assignment3"
 fig_dir  <- file.path(data_dir, "figures")
 dir.create(fig_dir, showWarnings = FALSE)
 
+# Small helper: save a ggplot to the figures folder
 save_plot <- function(p, name, w = 7, h = 4.5) {
   ggsave(file.path(fig_dir, name), p, width = w, height = h, dpi = 150)
 }
@@ -46,19 +51,23 @@ save_plot <- function(p, name, w = 7, h = 4.5) {
 # - Which variables contain NaN, and is the NaN "unknown" or "not applicable"?
 # - How skewed is revenue? Which classifications have the largest programs?
 
-athletics <- read.csv(file.path(data_dir, "data_783996yw.csv"))
+# athletics:  1000 institutions with revenue (used to build the models)
+# prediction: 10 institutions without revenue (we must predict these)
+athletics  <- read.csv(file.path(data_dir, "data_783996yw.csv"))
 prediction <- read.csv(file.path(data_dir, "predictions.csv"))
 
+# First look: size, variable types and the distribution of revenue
 dim(athletics)
 str(athletics)
 summary(athletics$revenue)
 
-# Missing values per variable
+# Missing values per variable (only show variables that have any)
 na_counts <- colSums(is.na(athletics))
 na_counts[na_counts > 0]
 
 # Is the missingness structural? An institution without men's teams
 # cannot have men's head coaches, so hc_men = NaN there means "none".
+# The tables cross "no teams" with "head coach missing".
 table(no_men_teams = athletics$teams_men == 0, hc_men_missing = is.na(athletics$hc_men))
 table(no_women_teams = athletics$teams_women == 0, hc_women_missing = is.na(athletics$hc_women))
 # ac_men / ac_women are never 0 in the data (min = 1), so NaN most likely
@@ -69,11 +78,13 @@ min(athletics$ac_men, na.rm = TRUE)
 sum(!is.na(athletics$ac_men)   & is.na(athletics$ac_salary_men))
 sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women))
 
-# Categorical variables
+# Categorical variables: how many institutions per level?
+# Watch out for very small levels (e.g. NCCAA Division I has only 2).
 table(athletics$classification)
 table(athletics$sector)
 
-# Revenue: raw vs log
+# Histograms of revenue on the original scale and on the log scale.
+# The original scale is extremely right-skewed; the log is roughly symmetric.
 p_rev <- ggplot(athletics, aes(revenue / 1e6)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "white") +
   labs(title = "Revenue of athletics programs", x = "Revenue (million USD)", y = "Count") +
@@ -85,7 +96,8 @@ p_logrev <- ggplot(athletics, aes(log(revenue))) +
 save_plot(p_rev, "revenue_hist.png")
 save_plot(p_logrev, "log_revenue_hist.png")
 
-# Revenue by classification (helps the story: FBS schools are a world apart)
+# Boxplots of log revenue per classification, sorted by the median.
+# Shows how strongly revenue depends on the division (FBS schools are a world apart).
 p_class <- ggplot(athletics, aes(x = reorder(classification, revenue, median), y = log(revenue))) +
   geom_boxplot(fill = "lightblue") + coord_flip() +
   labs(title = "Log revenue by classification", x = NULL, y = "log(revenue)") +
@@ -102,21 +114,26 @@ save_plot(p_class, "log_revenue_by_class.png", h = 5.5)
 #   using information from the test set?
 # - Which predictors are as skewed as revenue? Would logs help PCA too?
 
+# Group the predictors by type, because they get different treatment:
+# counts and salaries are skewed (-> log), shares lie in [0, 1] (-> keep).
 count_vars  <- c("ugrad_men", "ugrad_women", "athletes_men", "athletes_women",
                  "teams_men", "teams_women",
                  grep("^partic_", names(athletics), value = TRUE),
                  "hc_men", "hc_women", "ac_men", "ac_women")
 salary_vars <- c("hc_salary_men", "hc_salary_women", "ac_salary_men", "ac_salary_women")
 share_vars  <- c("hc_fulltime_share", "hc_female_share")
-num_vars    <- c(count_vars, salary_vars, share_vars)
+num_vars    <- c(count_vars, salary_vars, share_vars)   # all 28 numerical predictors
 
-# Step 1: structural NaNs -> 0 (no coaches, so no coach salary)
+# Step 1: structural NaNs -> 0.
+# A missing coach count means "no coaches of this type", so set it to 0.
+# If there are no coaches, their salary is also set to 0 (nothing is paid).
+# The loop runs once for the men's and once for the women's variables.
 fix_structural <- function(d) {
   for (s in c("men", "women")) {
     hc <- paste0("hc_", s); ac <- paste0("ac_", s)
     hs <- paste0("hc_salary_", s); as <- paste0("ac_salary_", s)
-    no_hc <- is.na(d[[hc]])
-    no_ac <- is.na(d[[ac]])
+    no_hc <- is.na(d[[hc]])          # institutions without head coaches
+    no_ac <- is.na(d[[ac]])          # institutions without assistant coaches
     d[[hc]][no_hc] <- 0
     d[[ac]][no_ac] <- 0
     d[[hs]][no_hc & is.na(d[[hs]])] <- 0
@@ -132,22 +149,28 @@ transform_vars <- function(d) {
   d
 }
 
-dat  <- athletics %>% fix_structural()
+# Apply step 1 to both datasets (same rule for both, so they stay comparable)
+dat        <- athletics %>% fix_structural()
 prediction <- prediction %>% fix_structural()
 
-# Remaining (genuine) missing values: only salaries of existing coaches
+# Remaining (genuine) missing values: only salaries of existing coaches.
+# These are imputed in Part 3, after the train/test split.
 colSums(is.na(dat[num_vars]))[colSums(is.na(dat[num_vars])) > 0]
 
+# Target variable: log revenue (revenue is always > 0, so plain log works)
 dat$log_revenue <- log(dat$revenue)
 
-# Factors with the same levels in the data and in predictions.csv
-dat$classification  <- factor(dat$classification)
-dat$sector          <- factor(dat$sector)
+# Turn the categorical variables into factors. The prediction set gets the
+# SAME levels, so that model.matrix() later creates identical dummy columns.
+dat$classification        <- factor(dat$classification)
+dat$sector                <- factor(dat$sector)
 prediction$classification <- factor(prediction$classification, levels = levels(dat$classification))
 prediction$sector         <- factor(prediction$sector, levels = levels(dat$sector))
+# Safety check: every level in the prediction set exists in the data
 stopifnot(!anyNA(prediction$classification), !anyNA(prediction$sector))
 
-# Skewness before and after the log transform
+# Skewness before and after the log transform (0 = symmetric,
+# > 0 = long right tail). Use this table to motivate the transformation.
 skewness_fun <- function(x) {
   x <- x[is.finite(x)]
   mean((x - mean(x))^3) / sd(x)^3
@@ -160,7 +183,8 @@ skew_tab <- data.frame(
 )
 print(skew_tab, digits = 2, row.names = FALSE)
 
-dat  <- transform_vars(dat)
+# Apply step 2 (log transform) to both datasets
+dat        <- transform_vars(dat)
 prediction <- transform_vars(prediction)
 
 
@@ -172,15 +196,18 @@ prediction <- transform_vars(prediction)
 #   training data only?
 # - Are all classification levels present in the training set?
 
+# Random 80/20 split. set.seed makes the split reproducible.
 set.seed(123)
 train_index <- sample(seq_len(nrow(dat)), size = floor(0.8 * nrow(dat)))
 train_data  <- dat[train_index, ]
 test_data   <- dat[-train_index, ]
 cat("Training:", nrow(train_data), " Test:", nrow(test_data), "\n")
+# Check that every classification level appears in the training set
 table(train_data$classification)
 
-# Median imputation of the genuinely missing salaries, using the
-# training medians for train, test and predictions.csv
+# Median imputation of the genuinely missing salaries. The medians are
+# computed on the TRAINING data only and then used for train, test and
+# the prediction set (otherwise information from the test set leaks in).
 train_medians <- sapply(train_data[num_vars], median, na.rm = TRUE)
 impute <- function(d) {
   for (v in num_vars) d[[v]][is.na(d[[v]])] <- train_medians[v]
@@ -189,9 +216,11 @@ impute <- function(d) {
 train_data <- impute(train_data)
 test_data  <- impute(test_data)
 prediction <- impute(prediction)
+# Safety check: no missing values left anywhere
 stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(prediction[num_vars]))
 
-# Correlations of the predictors with log revenue (exploration only)
+# Correlation of every predictor with log revenue, sorted from high to low
+# (exploration only: correlation, not causation)
 cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE)
 print(round(cor_tab, 2))
 
@@ -203,14 +232,17 @@ print(round(cor_tab, 2))
 # the dummies: PCA on 0/1 variables is hard to interpret). The
 # classification dummies return later in PCR variant B.
 
+# Predictor matrices for train and test, and the number of variables p
 X_train <- train_data[, num_vars]
 X_test  <- test_data[, num_vars]
 p       <- ncol(X_train)
 
+# PCA on the training data. center + scale = PCA on the correlation matrix,
+# needed because the variables have different units (counts, USD, shares).
 pca_model   <- prcomp(X_train, center = TRUE, scale. = TRUE)
-eigenvalues <- pca_model$sdev^2
-vaf         <- eigenvalues / sum(eigenvalues)
-cum_vaf     <- cumsum(vaf)
+eigenvalues <- pca_model$sdev^2              # variance of each component
+vaf         <- eigenvalues / sum(eigenvalues) # variance accounted for (share)
+cum_vaf     <- cumsum(vaf)                    # cumulative share
 pca_summary <- data.frame(PC = seq_along(eigenvalues), Eigenvalue = eigenvalues,
                           VAF = vaf, CumulativeVAF = cum_vaf)
 print(round(pca_summary, 3))
@@ -224,11 +256,13 @@ print(round(pca_summary, 3))
 #   (3) Scree plot: number of PCs before the "elbow"
 #   (4) Each retained PC explains at least a minimum share (here 1/p, which
 #       for standardised data is identical to Kaiser) or Jolliffe's 0.7 rule
-k_kaiser   <- sum(eigenvalues > 1)
-k_jolliffe <- sum(eigenvalues > 0.7)
-k_vaf80    <- which(cum_vaf >= 0.80)[1]
+k_kaiser   <- sum(eigenvalues > 1)            # number of eigenvalues above 1
+k_jolliffe <- sum(eigenvalues > 0.7)          # number of eigenvalues above 0.7
+k_vaf80    <- which(cum_vaf >= 0.80)[1]       # first PC where 80% is reached
 cat("Kaiser:", k_kaiser, " Jolliffe (0.7):", k_jolliffe, " 80% VAF:", k_vaf80, "\n")
 
+# Scree plot: eigenvalue per component, red line = Kaiser threshold of 1.
+# Look for the "elbow" where the curve flattens.
 p_scree <- ggplot(pca_summary, aes(PC, Eigenvalue)) +
   geom_line(color = "steelblue") + geom_point(color = "steelblue") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
@@ -247,11 +281,15 @@ save_plot(p_scree, "scree.png")
 # - Why is the permutation test usually less generous than Kaiser's rule?
 n_perm <- 1000
 set.seed(123)
+# Repeat 1000 times: shuffle each column separately, run PCA, store the VAFs.
+# Result: a 1000 x p matrix (one row per permutation, one column per PC).
 perm_vaf <- t(replicate(n_perm, {
   X_perm <- apply(X_train, 2, sample)
   ev <- prcomp(X_perm, center = TRUE, scale. = TRUE)$sdev^2
   ev / sum(ev)
 }))
+# 95th percentile of the "chance" VAF for every component, and a p-value:
+# the share of permutations in which chance did at least as well as observed
 perm_q95 <- apply(perm_vaf, 2, quantile, probs = 0.95)
 perm_p   <- sapply(seq_len(p), function(j) mean(perm_vaf[, j] >= vaf[j]))
 perm_tab <- data.frame(PC = seq_len(p), VAF = vaf, Perm95 = perm_q95, p_value = perm_p)
@@ -260,6 +298,8 @@ print(round(perm_tab, 3))
 k_perm <- which(vaf <= perm_q95)[1] - 1
 cat("Permutation test:", k_perm, "PCs\n")
 
+# Plot: observed VAF (blue) vs the 95% chance level (red). Components
+# where blue lies above red are kept.
 p_perm <- ggplot(perm_tab, aes(PC)) +
   geom_line(aes(y = VAF, color = "Observed")) + geom_point(aes(y = VAF, color = "Observed")) +
   geom_line(aes(y = Perm95, color = "Permutation 95%")) +
@@ -277,13 +317,17 @@ save_plot(p_perm, "permutation_test.png")
 # Guiding questions:
 # - Which components are borderline under Kaiser's rule (CI contains 1)?
 # - How wide is the CI for the VAF? What does that say about stability?
+
+# Statistic for boot(): PCA on the resampled rows (ind), return eigenvalues
 my_boot_pca <- function(x, ind) {
   prcomp(x[ind, ], center = TRUE, scale. = TRUE)$sdev^2
 }
 set.seed(123)
 fit_boot  <- boot(data = X_train, statistic = my_boot_pca, R = 1000)
-eigs_boot <- fit_boot$t
+eigs_boot <- fit_boot$t          # 1000 x p matrix of bootstrapped eigenvalues
 
+# 95% percentile interval for every eigenvalue; significant if the lower
+# bound is above 1 (bootstrapped Kaiser rule)
 kaiser_boot <- data.frame(
   PC = seq_len(p), Eigenvalue = eigenvalues,
   Lower = apply(eigs_boot, 2, quantile, 0.025),
@@ -291,9 +335,11 @@ kaiser_boot <- data.frame(
 )
 kaiser_boot$Significant <- kaiser_boot$Lower > 1
 print(head(kaiser_boot, 8), digits = 3)
+# Keep components up to the first one whose CI is not entirely above 1
 k_kaiser_boot <- which(!kaiser_boot$Significant)[1] - 1
 cat("Bootstrapped Kaiser:", k_kaiser_boot, "PCs\n")
 
+# Plot: eigenvalues with their bootstrap CIs; red line = 1
 p_kboot <- ggplot(head(kaiser_boot, 10), aes(PC, Eigenvalue)) +
   geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2) + geom_point(color = "steelblue") +
   geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
@@ -308,6 +354,8 @@ save_plot(p_kboot, "kaiser_bootstrap.png")
 # after comparing all criteria and motivate it in the report.
 n_pc <- k_perm
 
+# Bootstrap CI for the total VAF of the selected n_pc components:
+# sum of the first n_pc eigenvalues divided by p, in every bootstrap sample
 vaf_boot <- rowSums(eigs_boot[, 1:n_pc, drop = FALSE]) / p
 vaf_ci   <- quantile(vaf_boot, c(0.025, 0.975))
 cat("VAF of", n_pc, "PCs:", round(100 * cum_vaf[n_pc], 1), "%  95% CI:",
@@ -320,6 +368,7 @@ vaf_each_ci <- data.frame(PC = 1:n_pc, VAF = vaf[1:n_pc],
                           Upper = apply(vaf_each_boot[, 1:n_pc, drop = FALSE], 2, quantile, 0.975))
 print(round(vaf_each_ci, 3))
 
+# Overview table of all selection methods (for the report)
 pc_selection <- data.frame(
   Method = c("Kaiser (eigenvalue > 1)", "Jolliffe (eigenvalue > 0.7)", "80% cumulative VAF",
              "Permutation test", "Bootstrapped Kaiser"),
@@ -333,19 +382,24 @@ print(pc_selection)
 #   "investment / money per coach", "gender composition")?
 # - Which variables are badly represented by the selected PCs (low
 #   communality)? Those carry information the PCR throws away.
+
+# Loadings = weights of each variable in each selected component
 loadings <- pca_model$rotation[, 1:n_pc, drop = FALSE]
 print(round(loadings, 2))
 
-# Correlation between variable and component = loading * sd of the PC
+# Correlation between variable and component = loading * sd of the PC.
+# Easier to interpret than loadings (between -1 and 1).
 var_pc_cor  <- sweep(loadings, 2, pca_model$sdev[1:n_pc], "*")
 communality <- rowSums(var_pc_cor^2)   # share of each variable explained by n_pc PCs
 print(round(cbind(var_pc_cor, Communality = communality), 2))
 
-# Biplot of PC1 and PC2, coloured by classification
+# Biplot of PC1 and PC2: points = institutions (coloured by classification),
+# arrows = variables. Arrows pointing the same way = positively correlated.
 score_plot   <- data.frame(PC1 = pca_model$x[, 1], PC2 = pca_model$x[, 2],
                            Division = train_data$classification)
 loading_plot <- data.frame(Variable = rownames(pca_model$rotation),
                            PC1 = pca_model$rotation[, 1], PC2 = pca_model$rotation[, 2])
+# Stretch the arrows so they are visible on the scale of the scores
 arrow_scale <- 0.8 * min(max(abs(score_plot$PC1)) / max(abs(loading_plot$PC1)),
                          max(abs(score_plot$PC2)) / max(abs(loading_plot$PC2)))
 p_biplot <- ggplot(score_plot, aes(PC1, PC2)) +
@@ -375,22 +429,30 @@ save_plot(p_biplot, "biplot.png", w = 9, h = 6)
 #   the directions that predict revenue.)
 # - How much does adding the dummies help?
 
+# Variant A: PCR with log revenue as outcome and the 28 numerical predictors.
+# scale = TRUE standardises the predictors; validation = "CV" computes the
+# 10-fold cross-validated error for every number of components.
 pcr_data <- train_data[, c("log_revenue", num_vars)]
 set.seed(123)
 fit_pcr <- pcr(log_revenue ~ ., data = pcr_data, scale = TRUE, validation = "CV", segments = 10)
 summary(fit_pcr)
 
+# Number of components with the lowest CV error, and the smallest number
+# within one standard error of it (one-sigma rule, like lambda.1se)
 cv_rmsep <- RMSEP(fit_pcr, estimate = "CV")$val[1, 1, -1]   # drop the intercept-only model
 k_cv     <- which.min(cv_rmsep)
 k_cv_1se <- selectNcomp(fit_pcr, method = "onesigma")
 cat("PCR: CV-minimum", k_cv, "components, one-sigma rule", k_cv_1se, "components\n")
 
+# Plot of the CV error against the number of components; red line = n_pc
 png(file.path(fig_dir, "pcr_cv.png"), width = 1000, height = 650, res = 150)
 validationplot(fit_pcr, val.type = "RMSEP", main = "PCR: cross-validated RMSEP (log revenue)")
 abline(v = n_pc, lty = 2, col = "red")
 dev.off()
 
-# Variant B: PC scores (from the training PCA) + dummies
+# Variant B: PC scores (from the training PCA) + dummies.
+# The test scores are computed with the TRAINING PCA (predict on X_test),
+# so the test set is projected on the same components.
 train_scores <- data.frame(pca_model$x[, 1:n_pc, drop = FALSE],
                            classification = train_data$classification,
                            sector = train_data$sector,
@@ -398,6 +460,7 @@ train_scores <- data.frame(pca_model$x[, 1:n_pc, drop = FALSE],
 test_scores  <- data.frame(predict(pca_model, newdata = X_test)[, 1:n_pc, drop = FALSE],
                            classification = test_data$classification,
                            sector = test_data$sector)
+# OLS of log revenue on the PCs and the dummies (lm creates the dummies)
 fit_pcr_dum <- lm(log_revenue ~ ., data = train_scores)
 summary(fit_pcr_dum)
 
@@ -411,24 +474,35 @@ summary(fit_pcr_dum)
 #   for a more strongly shrunken model?
 # - Which coefficients are largest? Do they match the PCA story?
 
+# glmnet needs a numeric matrix: model.matrix() turns classification and
+# sector into dummy columns. [, -1] drops the intercept column, because
+# glmnet adds its own intercept.
 form_x  <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
 x_train <- model.matrix(form_x, data = train_data)[, -1]
 x_test  <- model.matrix(form_x, data = test_data)[, -1]
 y_train <- train_data$log_revenue
 y_test  <- test_data$log_revenue
 
+# Ridge = alpha = 0. cv.glmnet tries a grid of lambdas and uses 10-fold CV
+# to find lambda.min (lowest CV error) and lambda.1se (simplest model
+# within one standard error of the minimum).
 set.seed(123)
 cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
 cat("Ridge lambda.min:", cv_ridge$lambda.min, " lambda.1se:", cv_ridge$lambda.1se, "\n")
 
+# Plot 1: CV error against log(lambda), with both chosen lambdas marked
 png(file.path(fig_dir, "ridge_cv.png"), width = 1000, height = 650, res = 150)
 plot(cv_ridge)
 dev.off()
+# Plot 2: coefficient paths. All coefficients shrink towards 0 as lambda
+# grows, but (unlike LASSO) none of them becomes exactly 0.
 png(file.path(fig_dir, "ridge_paths.png"), width = 1000, height = 650, res = 150)
 plot(cv_ridge$glmnet.fit, xvar = "lambda")
 abline(v = log(c(cv_ridge$lambda.min, cv_ridge$lambda.1se)), lty = 2)
 dev.off()
 
+# Coefficient table at both lambdas (log scale: a coefficient b means
+# roughly exp(b) times the revenue, holding the other variables fixed)
 ridge_coef <- data.frame(
   Variable   = rownames(coef(cv_ridge, s = "lambda.min")),
   lambda_min = as.numeric(coef(cv_ridge, s = "lambda.min")),
@@ -449,11 +523,13 @@ print(ridge_coef, digits = 3, row.names = FALSE)
 #   mean(exp(residuals)) or, under normal errors, exp(sigma^2 / 2).
 # - Does the back-transformation change the ranking of the models?
 
-rmse <- function(y, yhat) sqrt(mean((y - yhat)^2))
-mae  <- function(y, yhat) mean(abs(y - yhat))
+# Error metrics: root mean squared error, mean absolute error, and the
+# median absolute percentage error (relative error, robust to outliers)
+rmse  <- function(y, yhat) sqrt(mean((y - yhat)^2))
+mae   <- function(y, yhat) mean(abs(y - yhat))
 mdape <- function(y, yhat) median(abs(y - yhat) / y)
 
-# Log-scale predictions (and training residuals for the smearing factor)
+# Test-set predictions of log revenue for every model
 pred_log <- list(
   "PCR (numerical, n_pc)"     = as.numeric(predict(fit_pcr, newdata = test_data, ncomp = n_pc)),
   "PCR (numerical, CV ncomp)" = as.numeric(predict(fit_pcr, newdata = test_data, ncomp = k_cv)),
@@ -461,6 +537,7 @@ pred_log <- list(
   "Ridge lambda.min"          = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.min")),
   "Ridge lambda.1se"          = as.numeric(predict(cv_ridge, newx = x_test, s = "lambda.1se"))
 )
+# Fitted values on the TRAINING set, needed for the smearing factor
 fit_log <- list(
   "PCR (numerical, n_pc)"     = as.numeric(predict(fit_pcr, ncomp = n_pc)),
   "PCR (numerical, CV ncomp)" = as.numeric(predict(fit_pcr, ncomp = k_cv)),
@@ -468,8 +545,12 @@ fit_log <- list(
   "Ridge lambda.min"          = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.min")),
   "Ridge lambda.1se"          = as.numeric(predict(cv_ridge, newx = x_train, s = "lambda.1se"))
 )
-smear <- sapply(fit_log, function(f) mean(exp(y_train - f)))   # Duan's smearing factor
+# Duan's smearing factor = average of exp(training residuals). Multiply
+# exp(prediction) by it to get an estimate of the MEAN revenue.
+smear <- sapply(fit_log, function(f) mean(exp(y_train - f)))
 
+# One row per model: metrics on the log scale, then on the revenue scale
+# (in million USD), once without ("naive") and once with smearing
 rev_test <- test_data$revenue
 eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) {
   pl <- pred_log[[m]]
@@ -494,7 +575,9 @@ eval_tab <- rbind(eval_tab, data.frame(
   Smearing = NA))
 print(eval_tab, digits = 3, row.names = FALSE)
 
-# Where do the revenue-scale errors come from? Errors by classification
+# Where do the revenue-scale errors come from? Errors by classification.
+# share_of_total_abs_err = which part of the total dollar error each
+# division causes (the FBS schools dominate).
 err_by_class <- data.frame(
   classification = test_data$classification,
   abs_err_log = abs(y_test - pred_log[["Ridge lambda.min"]]),
@@ -506,7 +589,8 @@ err_by_class <- data.frame(
   arrange(desc(MAE_rev_M))
 print(err_by_class, n = Inf)
 
-# Observed vs predicted (log scale)
+# Observed vs predicted log revenue on the test set. Points on the red
+# 45-degree line are perfect predictions.
 obs_pred <- data.frame(Observed = y_test,
                        PCR = pred_log[["PCR + dummies"]],
                        Ridge = pred_log[["Ridge lambda.min"]]) %>%
@@ -529,9 +613,11 @@ save_plot(p_obs, "obs_vs_pred.png", w = 8)
 #   use and why? Give both the median-type and the mean-type prediction.
 # - Do the predictions look plausible given each institution's division?
 
+# All 1000 institutions, with the remaining missing salaries imputed
 full_data <- impute(dat)
 
-# PCR + dummies on all data
+# PCR + dummies on all data: new PCA on all 1000 institutions, project the
+# 10 new institutions on it, then regress log revenue on PCs + dummies
 pca_full    <- prcomp(full_data[, num_vars], center = TRUE, scale. = TRUE)
 full_scores <- data.frame(pca_full$x[, 1:n_pc, drop = FALSE],
                           classification = full_data$classification,
@@ -546,11 +632,14 @@ x_full <- model.matrix(form_x, data = full_data)[, -1]
 x_new  <- model.matrix(form_x, data = prediction)[, -1]
 ridge_full <- glmnet(x_full, full_data$log_revenue, alpha = 0, lambda = cv_ridge$lambda.min)
 
+# Log-revenue predictions and the smearing factors of the refitted models
 pl_pcr   <- as.numeric(predict(fit_pcr_full, newdata = new_scores))
 pl_ridge <- as.numeric(predict(ridge_full, newx = x_new))
 smear_pcr   <- mean(exp(residuals(fit_pcr_full)))
 smear_ridge <- mean(exp(full_data$log_revenue - as.numeric(predict(ridge_full, newx = x_full))))
 
+# Final table in million USD: "median" = exp(prediction),
+# "mean" = exp(prediction) * smearing factor. Also saved as a CSV.
 pred_out <- data.frame(
   id = prediction$id, classification = prediction$classification,
   log_rev_PCR = pl_pcr, log_rev_Ridge = pl_ridge,
@@ -561,6 +650,7 @@ pred_out <- data.frame(
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, file.path(data_dir, "predictions_output.csv"), row.names = FALSE)
 
+# Short summary of the main results at the end of the output
 cat("\n--- Summary ---\n")
 print(pc_selection)
 cat("Selected PCs:", n_pc, " VAF:", round(100 * cum_vaf[n_pc], 1), "%\n")
