@@ -1,10 +1,28 @@
 # Assignment 3 – Revenue of US college athletics programs: step-by-step guide
 
-The code is in `assignment3/assignment3_revenue.R`. Run it from the repository root with
-`Rscript assignment3/assignment3_revenue.R`. It takes about 25 seconds. Figures go to
-`assignment3/figures/` and the 10 predictions go to `assignment3/predictions_output.csv`.
+There are two versions of the same code. Both give exactly the same results:
 
-The parts below follow the script. Each part has **what the code does**, **guiding questions**
+| File | Use it for |
+|---|---|
+| `assignment3/assignment3_code.Rmd` | **The report.** Code chunks with our own variable names (`athletics_new`, `prediction_new`, `fixed_coaches()`, …). Put the `.Rmd` in the same folder as `data_783996yw.csv` and `predictions-2.csv`; no `setwd()` is needed. Plots are stored as objects (`revenue`, `logrevenue`, `scree`, …) and printed. |
+| `assignment3/assignment3_revenue.R` | A standalone script (run with `Rscript assignment3/assignment3_revenue.R`, about 25 s). It saves the figures to `assignment3/figures/`. It uses the older names (`dat`, `fix_structural()`, …). |
+
+Both write the 10 predictions to `predictions_output.csv`.
+
+**Names in the `.Rmd`**
+
+| Object | What it is |
+|---|---|
+| `athletics` | The 1000 institutions, as loaded (never changed) |
+| `prediction` | The 10 institutions from `predictions-2.csv`, as loaded |
+| `athletics_new`, `prediction_new` | After `fixed_coaches()`, factors and `logged_vars()` |
+| `fixed_coaches()` | No coaches (NaN) → count 0 and salary 0 |
+| `logged_vars()` | `log1p()` of the counts and salaries |
+| `train_data`, `test_data` | 80/20 split of `athletics_new`, after `impute()` |
+| `full_data` | All of `athletics_new` after `impute()`, for the final predictions |
+| `revenue`, `logrevenue`, `classifications`, `scree`, `permutation`, `kaiserboot`, `biplot_pca`, `observed_predicted` | The ggplot figures |
+
+The parts below follow the code. Each part has **what the code does**, **guiding questions**
 (like the questions in Assignments 1 and 2), and **what came out** when I ran it (seed 123,
 80/20 split). All numbers depend on the seed and on your choices, so rerun the script before
 you copy anything into the report.
@@ -85,12 +103,39 @@ by classification.
 ## Part 2 – Missing values and transformations
 
 **What the code does**
-1. `fix_structural()` sets coach counts with NaN to 0, and sets the matching salary to 0.
-   It applies the same rule to `predictions.csv`.
-2. The skewed counts and salaries get `log1p(x) = log(1 + x)`. The two share variables
-   (between 0 and 1) stay as they are.
-3. The target is `log_revenue = log(revenue)`. There are no zeros, so a plain `log` works.
-4. The factor levels in `predictions.csv` are aligned with the data.
+1. `fixed_coaches()` sets coach counts with NaN to 0, and sets the matching salary to 0.
+   It applies the same rule to `prediction`. The result is `athletics_new` and `prediction_new`.
+2. The target is `log_revenue = log(revenue)`. There are no zeros, so a plain `log` works.
+3. `classification` and `sector` become factors. `prediction_new` gets the **same levels** as
+   `athletics_new`, so `model.matrix()` later creates identical dummy columns.
+4. The skewness table is computed, and then `logged_vars()` applies `log1p(x) = log(1 + x)`
+   to the skewed counts and salaries. The two share variables (between 0 and 1) stay as they
+   are. The skewness table must come first, because it needs the unlogged values.
+
+**How the `fixed_coaches()` loop works**
+- `for (s in c("men", "women"))`: the loop runs twice, once for the men's and once for the
+  women's columns.
+- `paste0("hc_", s)` builds the column **name**, e.g. `"hc_men"`. `x[[hc]]` then fetches that
+  column (`$` doesn't work with a name stored in a variable).
+- `no_hc <- is.na(x[[hc]])` is TRUE/FALSE per institution: "no head coaches".
+- `x[[hc]][no_hc] <- 0` sets the count to 0 for those rows.
+- `x[[hs]][no_hc & is.na(x[[hs]])] <- 0`: the salary becomes 0 **only** if there are no coaches
+  **and** the salary is missing.
+
+**What happens to the (possible) volunteers.** EADA counts volunteer coaches, but leaves them
+out of the average salary.
+
+| Situation | Data | Treatment |
+|---|---|---|
+| Paid coaches + some volunteers | Count includes everyone; salary = average over paid coaches | Nothing to fix |
+| No coaches | Count NaN, salary NaN | `fixed_coaches()`: both 0 |
+| Coaches but no salary (all volunteers?) | Count present, salary NaN (9 men's, 7 women's assistant salaries) | `fixed_coaches()` leaves them; `impute()` in Part 3 gives the training median |
+
+Nobody is deleted: all 1000 institutions stay in the data. Dropping them would remove mostly
+small schools, bias the data towards big programs, and isn't possible for the 10 schools you
+must predict. If you prefer "volunteers = salary 0", add
+`x[[hs]][is.na(x[[hs]])] <- 0` and `x[[as]][is.na(x[[as]])] <- 0` at the end of the loop. You
+could run it both ways and say whether the choice matters (only 16 of 1000 values).
 
 **Guiding questions**
 - Why is 0 the right value for "no coaches", while a median would be wrong there?
@@ -108,8 +153,22 @@ by classification.
 ## Part 3 – Train/test split and preprocessing
 
 **What the code does:** a seeded 80/20 split (800/200). It computes the imputation medians
-on the training set only and applies them to train, test and predictions. It then prints the
-correlations of each predictor with log revenue.
+on the training set only and applies them to `train_data`, `test_data` and `prediction_new`.
+A `stopifnot()` check confirms that no NA is left. It then prints the correlations of each
+predictor with log revenue.
+
+**Where the NAs go**
+
+| Step | Object | NAs left? |
+|---|---|---|
+| Load | `athletics` | Yes, all |
+| `fixed_coaches()` + `logged_vars()` | `athletics_new` | Yes, the 16 salaries |
+| Split | `train_data`, `test_data` | Yes, the 16 salaries |
+| `impute()` | `train_data`, `test_data`, `prediction_new` | **No** |
+| `impute(athletics_new)` | `full_data` (Part 8) | No |
+
+`athletics_new` itself keeps the 16 NAs. For plots or correlations on all data, use
+`full_data` or `na.rm = TRUE`.
 
 **Guiding questions**
 - Are all classification levels in the training set? (Yes with seed 123. Check yours.)
@@ -136,7 +195,7 @@ the dummies because PCA on 0/1 variables is hard to interpret.
 | Kaiser (eigenvalue > 1) | 6 |
 | Jolliffe (eigenvalue > 0.7) | 9 |
 | 80% cumulative VAF | 7 |
-| Scree plot elbow (`figures/scree.png`) | ≈ 2–3 (λ₁ = 13.8, λ₂ = 2.8, λ₃ = 1.6, then flat around 1) |
+| Scree plot elbow (`scree`) | ≈ 2–3 (λ₁ = 13.8, λ₂ = 2.8, λ₃ = 1.6, then flat around 1) |
 
 **Guiding questions:** Do the criteria agree? Why is Kaiser close to arbitrary here?
 PCs 4–6 have eigenvalues of 1.2, 1.1 and 1.0, so they sit right at the threshold.
@@ -184,7 +243,7 @@ each one, stores the eigenvalues, and builds percentile CIs.
 
 **What the code does:** it prints the loadings, the variable–PC correlations
 (loading × sd of the PC) and the communalities (the share of each variable explained by the
-chosen PCs). It also draws a biplot coloured by classification (`figures/biplot.png`).
+chosen PCs). It also draws a biplot coloured by classification (`biplot_pca`).
 
 **Suggested interpretation (check it against your own loadings and biplot):**
 
@@ -302,8 +361,26 @@ preprocessing to `predictions.csv` and reports log predictions, a *median-type* 
 
 ---
 
+## Common questions about the code
+
+- **`revenue / 1e6`:** `1e6` = 1,000,000. Dividing by it puts the x-axis in million USD; the
+  data stay unchanged.
+- **`bins = 50`:** the histogram splits the range into 50 equal-width bars (about 5.8M USD each
+  for revenue, about 0.2 for log revenue). `fill` is the bar colour, `color` the outline.
+- **`grep("^partic_", names(athletics), value = TRUE)`:** returns all column names that start
+  with `partic_` (`^` = "starts with"). `value = TRUE` returns the names, not their positions.
+- **`model.matrix(...)[, -1]`:** turns the factors into dummy columns; `[, -1]` drops the
+  intercept column, because glmnet adds its own.
+- **`biplot_pca`, not `biplot`:** `biplot` is already a base R function.
+- **Bugs fixed in our first draft of the cleanup chunk:**
+  - `logged_vars()` wrote to `d[[v]]` instead of `x[[v]]`, which gives the error "object 'd'
+    not found".
+  - The factor lines changed `prediction` instead of `prediction_new`.
+  - `logged_vars()` was defined but never applied.
+  - `setwd()` inside a chunk is reset after that chunk, so it was removed.
+
 ## Things you may want to change or add
-- **Number of PCs:** the line `n_pc <- k_perm` in Part 4c. With 5 PCs (the bootstrapped
+- **Number of PCs:** the line `n_pc <- k_perm` in the PCA chunk (Part 4c). With 5 PCs (the bootstrapped
   Kaiser rule), rerun and compare.
 - **Rare levels:** merge NCCAA Division I (2 schools) and Independent (7) into "Other", and
   the two small sectors as well, if you think their dummies are unstable.
