@@ -1,0 +1,33 @@
+variable,description,unit
+unitid,Institution identifier (IPEDS unit ID); in predictions.csv replaced by id 1-10,ID
+classification,"Athletic association and division, e.g. NCAA Division I-FBS, NCAA Division III with football, NAIA Division I, NJCAA Division I, CCCAA",category
+sector,Control and level of the institution: public / private nonprofit / private for-profit; 2-year / 4-year or above,category
+ugrad_men,Undergraduate men enrolled,count
+ugrad_women,Undergraduate women enrolled,count
+athletes_men,"Men participating in varsity athletics; each athlete counted once, even if on several teams",count
+athletes_women,"Women participating in varsity athletics; each athlete counted once, even if on several teams",count
+teams_men,Number of sports with at least one male participant,count
+teams_women,Number of sports with at least one female participant,count
+partic_football,Participants in football (0 if the institution has no team),count
+partic_bball_men,Participants in men's basketball (0 if no team),count
+partic_bball_women,Participants in women's basketball (0 if no team),count
+partic_baseball,Participants in baseball (0 if no team),count
+partic_softball,Participants in softball (0 if no team),count
+partic_soccer_men,Participants in men's soccer (0 if no team),count
+partic_soccer_women,Participants in women's soccer (0 if no team),count
+partic_track_men,Participants in men's track and field and cross country (0 if no team),count
+partic_track_women,Participants in women's track and field and cross country (0 if no team),count
+partic_volleyball_women,Participants in women's volleyball (0 if no team),count
+partic_other_men,"Participants in all other men's sports (e.g. golf, tennis, wrestling, swimming)",count
+partic_other_women,"Participants in all other women's sports (e.g. golf, tennis, rowing, swimming)",count
+hc_men,Head coaches of men's teams (coaches of either gender),count
+hc_women,Head coaches of women's teams (coaches of either gender),count
+hc_fulltime_share,Share of all head coaches who are full-time in their coaching role,share (0-1)
+hc_female_share,Share of all head coaches who are women,share (0-1)
+ac_men,Assistant coaches of men's teams (coaches of either gender),count
+ac_women,Assistant coaches of women's teams (coaches of either gender),count
+hc_salary_men,Average annual institutional salary per head coach of men's teams,USD
+hc_salary_women,Average annual institutional salary per head coach of women's teams,USD
+ac_salary_men,Average annual institutional salary per assistant coach of men's teams,USD
+ac_salary_women,Average annual institutional salary per assistant coach of women's teams,USD
+revenue,Total revenue of the athletics program (variable of interest; not in predictions.csv),USD

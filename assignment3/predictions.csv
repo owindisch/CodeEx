@@ -1,0 +1,11 @@
+id,classification,sector,ugrad_men,ugrad_women,athletes_men,athletes_women,teams_men,teams_women,partic_football,partic_bball_men,partic_bball_women,partic_baseball,partic_softball,partic_soccer_men,partic_soccer_women,partic_track_men,partic_track_women,partic_volleyball_women,partic_other_men,partic_other_women,hc_men,hc_women,hc_fulltime_share,hc_female_share,ac_men,ac_women,hc_salary_men,hc_salary_women,ac_salary_men,ac_salary_women
+1,NCAA Division I-FBS,"Public, 4-year or above",8277,11487,301,244,7,8,118,16,24,37,25,29,38,77,118,16,66,93,7,8,0.7333,0.2,43,34,2293482.0,404553.0,324154.0,102775.0
+2,NCAA Division I-FCS,"Public, 4-year or above",3210,5166,212,132,5,7,128,17,16,0,25,0,0,54,59,19,44,46,5,7,0.5833,0.1667,21,10,225899.0,78463.0,73028.0,39625.0
+3,NCAA Division I without football,"Public, 4-year or above",1045,1218,102,95,4,6,0,13,15,39,17,0,0,83,56,20,12,19,4,6,0.6,0.4,7,9,89674.0,79172.0,56908.0,52031.0
+4,NCAA Division II with football,"Private nonprofit, 4-year or above",510,486,411,195,10,11,151,19,16,62,24,70,46,92,69,21,82,92,10,11,0.5238,0.3333,14,7,39735.0,36517.0,29951.0,19628.0
+5,NCAA Division II without football,"Public, 4-year or above",4847,3819,139,116,12,11,0,15,13,22,12,22,22,21,27,15,57,27,12,11,0.0,0.087,12,14,4933.0,4667.0,2850.0,2758.0
+6,NCAA Division III with football,"Private nonprofit, 4-year or above",494,424,324,156,8,8,125,21,22,43,24,36,33,60,45,20,68,37,8,8,0.0,0.3125,22,12,33678.0,23103.0,11167.0,9325.0
+7,NCAA Division III without football,"Private nonprofit, 4-year or above",501,837,179,171,9,10,0,15,16,33,20,34,24,11,10,13,84,88,9,10,0.5263,0.4211,22,27,41127.0,39560.0,5955.0,6951.0
+8,NAIA Division I,"Public, 4-year or above",277,621,50,20,2,2,0,20,10,30,0,0,0,0,0,10,0,0,2,2,1.0,0.5,2,2,50000.0,47500.0,30000.0,40000.0
+9,NJCAA Division I,"Public, 4-year or above",2733,2821,39,49,2,3,0,11,13,28,22,0,0,0,0,14,0,0,2,3,1.0,0.4,5,7,69702.0,59801.0,5944.0,7383.0
+10,CCCAA,"Public, 2-year",3916,5025,188,102,10,11,57,16,15,34,20,27,25,42,20,15,56,60,10,11,0.0,0.381,50,49,41933.0,39361.0,8554.0,5164.0
