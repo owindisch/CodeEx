@@ -1,16 +1,16 @@
 ## Assignment 3: Revenue of US Intercollegiate Athletics Programs
-## Same code as assignment3_code.Rmd (generated with knitr::purl), for running without knitting.
+## Same code as assignment3_report.Rmd (generated with knitr::purl), for running without knitting.
 ## Run inside the assignment3 folder:  Rscript assignment3_revenue.R
 
-# active packages needed (or install if not present), as in the lecture code
-if (!require("tidyverse")) install.packages("tidyverse")
-if (!require("gridExtra")) install.packages("gridExtra")
-if (!require("caret"))     install.packages("caret")     # createDataPartition() for the train/test split
-if (!require("boot"))      install.packages("boot")      # bootstrap of the eigenvalues
-if (!require("glmnet"))    install.packages("glmnet")    # ridge regression
+knitr::opts_chunk$set(fig.pos = "H", fig.align = "center", fig.width = 6.5, fig.height = 4)
 
-permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scale.data = TRUE, ...){
-  # permutation test for pca (lecture week 5), defined here so no separate file is needed
+library(tidyverse)
+library(glmnet)
+library(boot)
+library(gridExtra)
+library(caret)
+
+permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scale.data = TRUE, ...){ # permutation test function from lecture 5
   n <- nrow(X)
   m <- ncol(X)
   X <- scale(X, center = center.data, scale = scale.data)
@@ -39,171 +39,141 @@ permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scal
   return(perc.alpha)
 }
 
-# no setwd() needed: knitr runs the chunks in the folder of this .Rmd, so keep the
-# .Rmd and the csv files in the same folder
-athletics  <- read.csv("data_783996yw.csv")
-prediction <- read.csv("predictions-2.csv")
-
+athletics  <- read.csv("data_783996yw.csv")  # 1000 institutions with revenue
+prediction <- read.csv("predictions-2.csv")  # 10 institutions, revenue has to be predicted
 
 # 1. Inspect data
 
-dim(athletics) #check size, variables and distribution of revenue, the variable of interest
+dim(athletics) # check size, variables and distribution of revenue, the variable of interest
 str(athletics)
 summary(athletics$revenue)
 
-na_counts <- colSums(is.na(athletics)) #check missing values for each variable/column
-na_counts[na_counts > 0] #show only cols with missing values. hc na counts match with hc salary na counts
+na_counts <- colSums(is.na(athletics)) # check missing values for each variable/column
+na_counts[na_counts > 0] # show only cols with missing values. hc na counts match with hc salary na counts
 
-table(no_men_teams = athletics$teams_men == 0, hc_men_missing = is.na(athletics$hc_men)) #institution with no men's team can't have men's hc!
-table(no_women_teams = athletics$teams_women == 0, hc_women_missing = is.na(athletics$hc_women)) #same for women
-min(athletics$ac_men, na.rm = TRUE) #ac counts are never 0 (min = 1), so na in ac_men means no acs at the institution
+table(no_men_teams = athletics$teams_men == 0, hc_men_missing = is.na(athletics$hc_men)) # institution with no men's team can't have men's hc!
+table(no_women_teams = athletics$teams_women == 0, hc_women_missing = is.na(athletics$hc_women)) # same for women
+min(athletics$ac_men, na.rm = TRUE) # ac counts are never 0 (min = 1), so na in ac_men means no acs at the institution
 
-sum(!is.na(athletics$ac_men)   & is.na(athletics$ac_salary_men)) #how many institutions HAVE acs but no salary reported?
-sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women)) #probably volunteers (eada leaves them out of the average salary)
+sum(!is.na(athletics$ac_men)   & is.na(athletics$ac_salary_men)) # how many institutions have acs but no salary reported?
+sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women)) # probably volunteers (eada leaves them out of the average salary)
 
-table(athletics$classification) #get an overview of categorical variables and their levels
-table(athletics$sector) #some classifications and sectors have very small levels:
-                        #NCCAA Division I, Private for-profit 4-year or above, Private nonprofit 2-year
+table(athletics$classification) # get an overview of categorical variables and their levels
+table(athletics$sector) # some classifications and sectors have very small levels:
+                        # NCCAA Division I, Private for-profit 4-year or above, Private nonprofit 2-year
 
-revenue <- ggplot(athletics, aes(revenue / 1e6)) +  #inspect the revenue variable itself, divide revenue by one million before plotting for easier reading
+revenue <- ggplot(athletics, aes(revenue / 1e6)) +  # inspect the revenue variable, divide by one million for easier reading
   geom_histogram(bins = 50, fill = "blue", color = "white") +
   labs(title = "Revenue of athletics programs", x = "Revenue (in million USD)", y = "Count") +
   theme_minimal()
-revenue #a very skewed histogram...log it to combat skewness
+revenue # a very skewed histogram...log it to combat skewness
 
 logrevenue <- ggplot(athletics, aes(log(revenue))) +
   geom_histogram(bins = 50, fill = "purple", color = "white") +
   labs(title = "Log revenue", x = "log(revenue)", y = "Count") +
   theme_minimal()
-logrevenue
+logrevenue # roughly symmetric
 
-grid.arrange(revenue, logrevenue, ncol = 2) #both histograms next to each other (for the report)
-
-classifications <- ggplot(athletics, aes(x = reorder(classification, revenue, median), y = log(revenue))) + #how strongly does revenue depend on the division?
-  geom_boxplot(fill = "lightblue") + coord_flip() +                                                         #check with boxplots of log revenue per
-  labs(title = "Log revenue by classification", x = NULL, y = "log(revenue)") +                             #classification, sorted by median
-  theme_minimal()
-classifications
+grid.arrange(revenue, logrevenue, ncol = 2) # both histograms next to each other
 
 # 2. Clean up the data
 
 count_vars  <- c("ugrad_men", "ugrad_women", "athletes_men", "athletes_women", "teams_men", "teams_women", # the predictors are grouped by variable type
-                 grep("^partic_", names(athletics), value = TRUE), #add all the partic_ variables more quickly
-                 "hc_men", "hc_women", "ac_men", "ac_women") #logged
-salary_vars <- c("hc_salary_men", "hc_salary_women", "ac_salary_men", "ac_salary_women") #logged
+                 grep("^partic_", names(athletics), value = TRUE), # add all the partic_ variables more quickly
+                 "hc_men", "hc_women", "ac_men", "ac_women") # logged
+salary_vars <- c("hc_salary_men", "hc_salary_women", "ac_salary_men", "ac_salary_women") # logged
 share_vars  <- c("hc_fulltime_share", "hc_female_share") # 0 to 1, not logged
 num_vars    <- c(count_vars, salary_vars, share_vars)   # all 28 numerical predictors
 
 fixed_coaches <- function(x) {
-  for (s in c("men", "women")) { #loop runs once for men's and women's variables (hc, ac, salaries)
-    hc <- paste0("hc_", s); ac <- paste0("ac_", s) #becomes hc_men and ac_men, then hc_women and ac_women
-    hs <- paste0("hc_salary_", s); as <- paste0("ac_salary_", s) #same for the salary columns
+  for (s in c("men", "women")) { # loop runs once for men's and once for women's variables (hc, ac, salaries)
+    hc <- paste0("hc_", s); ac <- paste0("ac_", s) # becomes hc_men and ac_men, then hc_women and ac_women
+    hs <- paste0("hc_salary_", s); as <- paste0("ac_salary_", s) # same for the salary columns
     no_hc <- is.na(x[[hc]])          # institutions without hcs
     no_ac <- is.na(x[[ac]])          # institutions without acs
-    x[[hc]][no_hc] <- 0              # missing coaches become 0 (e.g. no men's team -> no men's hc)
+    x[[hc]][no_hc] <- 0              # missing coaches become 0 (no men's team -> no men's hc)
     x[[ac]][no_ac] <- 0
-    x[[hs]][no_hc & is.na(x[[hs]])] <- 0 # no coaches -> salary also becomes 0 (nothing is paid)
-    x[[as]][no_ac & is.na(x[[as]])] <- 0 # coaches present but no salary (volunteers?) stay na -> imputed later
+    x[[hs]][no_hc & is.na(x[[hs]])] <- 0 # no coaches -> salary also becomes 0
+    x[[as]][no_ac & is.na(x[[as]])] <- 0 # coaches present but no salary (volunteers?) stay na for now, imputed after the split
   }
   x
 }
 
-logged_vars <- function(x) { #skewed variables, we log them
-  for (v in c(count_vars, salary_vars)) x[[v]] <- log1p(x[[v]]) #log(x + 1) in case x is 0
+logged_vars <- function(x) { # skewed variables, we log them
+  for (v in c(count_vars, salary_vars)) x[[v]] <- log1p(x[[v]]) # log(x + 1) in case x is 0
   x
 }
 
-athletics_new  <- athletics %>% fixed_coaches() #the function fixed_coaches is applied to both datasets
+athletics_new  <- athletics %>% fixed_coaches() # the function fixed_coaches is applied to both datasets
 prediction_new <- prediction %>% fixed_coaches()
 
-colSums(is.na(athletics_new[num_vars]))[colSums(is.na(athletics_new[num_vars])) > 0] #only some ac salaries are still missing (the potential volunteers)
+colSums(is.na(athletics_new[num_vars]))[colSums(is.na(athletics_new[num_vars])) > 0] # only some ac salaries are still missing (the potential volunteers)
 
-athletics_new$log_revenue <- log(athletics_new$revenue) #this is the target variable
+athletics_new$log_revenue <- log(athletics_new$revenue) # this is the target variable
 
-athletics_new$classification  <- factor(athletics_new$classification) #categorical variables transformed to factors, for both datasets
+athletics_new$classification  <- factor(athletics_new$classification) # categorical variables transformed to factors, for both datasets
 athletics_new$sector          <- factor(athletics_new$sector)
-prediction_new$classification <- factor(prediction_new$classification, levels = levels(athletics_new$classification)) #same levels -> same dummies
+prediction_new$classification <- factor(prediction_new$classification, levels = levels(athletics_new$classification)) # same levels -> same dummies
 prediction_new$sector         <- factor(prediction_new$sector, levels = levels(athletics_new$sector))
-stopifnot(!anyNA(prediction_new$classification), !anyNA(prediction_new$sector)) #check: every level in prediction exists in the data
+stopifnot(!anyNA(prediction_new$classification), !anyNA(prediction_new$sector)) # check: every level in prediction exists in the data
 
-skewness_fun <- function(x) { #skewness: 0 = symmetric, > 0 = long right tail
-  x <- x[is.finite(x)]
-  mean((x - mean(x))^3) / sd(x)^3
-}
-skew_tab <- data.frame( #skewness before and after logging, to motivate the log
-  Variable = c("revenue", count_vars, salary_vars),
-  Raw = sapply(c("revenue", count_vars, salary_vars), function(v) skewness_fun(athletics_new[[v]])),
-  Log = c(skewness_fun(athletics_new$log_revenue),
-          sapply(c(count_vars, salary_vars), function(v) skewness_fun(log1p(athletics_new[[v]])))))
-print(skew_tab, digits = 2, row.names = FALSE)
-
-athletics_new  <- logged_vars(athletics_new) #log the skewed predictors in both datasets
+athletics_new  <- logged_vars(athletics_new) # log the skewed predictors in both datasets
 prediction_new <- logged_vars(prediction_new)
 
+# 3. Split the data
 
-# 3. Train/test split and imputation (on train only)
-
-# create train and test set (do NOT burn the test set), as in the penalized regression lecture code
 set.seed(123)
 trainRowNumbers <- createDataPartition(athletics_new$log_revenue, p = 0.8, list = FALSE) # step 1: row numbers for the training data (80%)
 train_data <- athletics_new[trainRowNumbers, ]  # step 2: training dataset
 test_data  <- athletics_new[-trainRowNumbers, ] # step 3: test dataset
-table(train_data$classification) #are all levels in the training set?
+table(train_data$classification) # are all levels in the training set?
 
-train_medians <- sapply(train_data[num_vars], median, na.rm = TRUE) #medians from the training data only (no leakage)
-impute <- function(x) { #remaining na (salaries of potential volunteers) -> training median
+train_medians <- sapply(train_data[num_vars], median, na.rm = TRUE) # medians from the training data only (no leakage)
+impute <- function(x) { # remaining na (salaries of potential volunteers) -> training median
   for (v in num_vars) x[[v]][is.na(x[[v]])] <- train_medians[v]
   x
 }
 train_data     <- impute(train_data)
 test_data      <- impute(test_data)
 prediction_new <- impute(prediction_new)
-stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(prediction_new[num_vars])) #check: no na left
+stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(prediction_new[num_vars])) # check if no na is left
 
-cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE) #correlation with log revenue
-round(cor_tab, 2) #salaries and coaches correlate strongly: in eada revenue must cover expenses
+cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE) # correlation with log revenue
+round(cor_tab, 2) # salaries and coaches correlate strongly with log revenue (in eada revenue must cover expenses)
 
-
-# 4. PCA on the 28 numerical predictors (training data), as in the lecture code of week 5
-# the dummies are left out: pca on 0/1 variables is hard to interpret, they return in the pcr
+# 4. PCA on the 28 numerical predictors (training data)
+# dummies are left out for now, they return in the pcr (pca on 0/1 variables is hard to interpret)
 
 X_pca      <- train_data[, num_vars] # predictors of the training set
 X_pca_test <- test_data[, num_vars]  # predictors of the test set
 p          <- ncol(X_pca)            # 28 variables
 
 fitpca <- princomp(X_pca, cor = TRUE, scores = TRUE) # pca on the correlation matrix (variables have different units)
-summary(fitpca)                                      # sd, proportion of variance (vaf) and cumulative vaf per component
-eigenvalues <- fitpca$sdev^2                         # eigenvalue = variance of each component
+summary(fitpca)                                      # sd, vaf and cumulative vaf per component
+eigenvalues <- fitpca$sdev^2                         # variance of each component
 vaf         <- eigenvalues / p                       # proportion vaf (eigenvalues of a correlation matrix sum to p)
 cum_vaf     <- cumsum(vaf)
 
-# 4a. simple rules as a reference: scree plot, kaiser and vaf (kaiser and vaf are bootstrapped below)
-screeplot(fitpca, npcs = p, type = "lines", main = "Scree plot", las = 1) # look for the elbow
+screeplot(fitpca, npcs = p, type = "lines", main = "Scree plot", las = 1) # elbow plot
 abline(h = 1, col = "red", lty = 2)                                       # red line = kaiser
-k_kaiser <- sum(eigenvalues > 1)      # kaiser: a pc must explain more than one original variable
+k_kaiser <- sum(eigenvalues > 1)      # kaiser: a pc has to explain more than one original variable
 k_vaf80  <- which(cum_vaf >= 0.80)[1] # first pc where 80% of the variance is reached
 
-# 4b. permutation test (lecture function permtestPCA): shuffle each column -> no correlation left,
-# eigenvalues only reflect chance; a pc is meaningful if its eigenvalue is above the upper bound
-set.seed(123)
-perm_range <- permtestPCA(X_pca, nTests = 1000) # plot + matrix with the 2.5% and 97.5% quantiles per eigenvalue
+set.seed(123) # conduct a permutation test
+perm_range <- permtestPCA(X_pca, nTests = 1000) # plot and matrix with the 2.5% and 97.5% quantiles per eigenvalue
 round(cbind(Eigenvalue = eigenvalues, Lower = perm_range[, 1], Upper = perm_range[, 2])[1:8, ], 3)
 k_perm <- which(eigenvalues <= perm_range[, 2])[1] - 1 # keep pcs up to the first one that is not above chance
 
-# 4c. bootstrap of kaiser's rule and of vaf (lecture code week 5)
-# 1. define function that runs pca and returns the eigenvalues
-my_boot_pca <- function(x, ind){
+my_boot_pca <- function(x, ind){ # run pca on the resampled rows and return the eigenvalues
   res <- princomp(x[ind, ], cor = TRUE)
   return(res$sdev^2)
 }
-# 2. run bootstrap
-set.seed(123)
-fit.boot  <- boot(data = X_pca, statistic = my_boot_pca, R = 1000)
-# 3. store the bootstrapped eigenvalues
-eigs.boot <- fit.boot$t # R x p matrix with eigenvalues
 
-# kaiser: is the eigenvalue significantly > 1? yes if the whole 95% ci is above 1
-kaiser_boot <- data.frame(PC = 1:p, Eigenvalue = eigenvalues,
+set.seed(123) # run the bootstrap
+fit.boot  <- boot(data = X_pca, statistic = my_boot_pca, R = 1000)
+eigs.boot <- fit.boot$t # store the bootstrapped eigenvalues (1000 x 28 matrix)
+
+kaiser_boot <- data.frame(PC = 1:p, Eigenvalue = eigenvalues, # is the eigenvalue sig. > 1? yes if the whole 95% confidence interval is above 1
                           Lower = apply(eigs.boot, 2, quantile, 0.025),
                           Upper = apply(eigs.boot, 2, quantile, 0.975))
 kaiser_boot$Significant <- kaiser_boot$Lower > 1
@@ -215,15 +185,14 @@ boxplot(eigs.boot[, 1:10], las = 1, xlab = "Dimension", ylab = "Eigenvalue", col
         main = "Bootstrapped eigenvalues")
 abline(h = 1, col = "red", lty = 2)
 
-pc_selection <- data.frame( # overview of the methods for the report
+pc_selection <- data.frame( # overview of the methods
   Method = c("Kaiser (eigenvalue > 1)", "80% cumulative VAF", "Permutation test", "Bootstrapped Kaiser"),
   PCs = c(k_kaiser, k_vaf80, k_perm, k_kaiser_boot))
 pc_selection
 
-n_pc <- k_perm # chosen number of pcs: the permutation test (most formal), change and motivate if you choose differently
+n_pc <- k_perm # chosen number of pcs (permutation test)
 
-# vaf: bootstrapped proportion of variance explained by the chosen n_pc components
-vaf.boot   <- rowSums(eigs.boot[, 1:n_pc, drop = FALSE]) / p
+vaf.boot   <- rowSums(eigs.boot[, 1:n_pc, drop = FALSE]) / p # bootstrapped proportion of variance explained by the chosen n_pc components
 perc.alpha <- quantile(vaf.boot, c(0.025, 1 - 0.025)) # 95% percentile interval
 round(100 * c(VAF = cum_vaf[n_pc], perc.alpha), 1)
 hist(vaf.boot, xlab = paste("Proportion of variance explained by", n_pc, "PCs"), las = 1, col = "blue",
@@ -231,21 +200,18 @@ hist(vaf.boot, xlab = paste("Proportion of variance explained by", n_pc, "PCs"),
 abline(v = perc.alpha, col = "green", lwd = 2) # green: 95% interval
 abline(v = cum_vaf[n_pc], col = "red", lwd = 2) # red: estimate on the training data
 
-# 4d. interpretation: loadings, fit per variable and biplots -> give the pcs a name
 print(fitpca$loadings[, 1:n_pc], digits = 2) # weights of the variables in each pc
 
-# diagnostics: fit per variable (lecture week 5) = squared correlations between variables and scores
-corpca <- cor(X_pca, fitpca$scores)[, 1:n_pc]
+corpca  <- cor(X_pca, fitpca$scores)[, 1:n_pc] # diagnostics: fit per variable = squared correlations between variables and scores
 fit_var <- cbind(corpca, Fit = rowSums(corpca^2))
 round(fit_var, 2)
 
-op <- par(mfrow = c(1, 2)) # biplots as in the lecture; points = institutions, arrows = variables
+op <- par(mfrow = c(1, 2)) # in the biplots points = institutions, arrows = variables
 biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("blue", "red"),
        asp = 1, cex = c(0.4, 0.7), xlabs = rep("o", nrow(X_pca)), main = "Biplot components 1 and 2")
 biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 2:3, col = c("blue", "red"),
        asp = 1, cex = c(0.4, 0.7), xlabs = rep("o", nrow(X_pca)), main = "Biplot components 2 and 3")
 par(op)
-
 
 # 5. Principal component regression: log revenue on the n_pc pc scores + classification and sector dummies
 # the pcs summarise the 28 numerical predictors, the dummies add the categorical information
@@ -254,52 +220,47 @@ train_scores <- data.frame(fitpca$scores[, 1:n_pc, drop = FALSE], # pc scores of
                            classification = train_data$classification,
                            sector = train_data$sector,
                            log_revenue = train_data$log_revenue)
-test_scores  <- data.frame(predict(fitpca, newdata = X_pca_test)[, 1:n_pc, drop = FALSE], # test projected on the TRAINING pca
+test_scores  <- data.frame(predict(fitpca, newdata = X_pca_test)[, 1:n_pc, drop = FALSE], # test projected on the training pca
                            classification = test_data$classification,
                            sector = test_data$sector)
-fit_pcr <- lm(log_revenue ~ ., data = train_scores) # ols on pcs + dummies (lm makes the dummies itself)
+fit_pcr <- lm(log_revenue ~ ., data = train_scores) # ols on pcs and dummies (lm makes the dummies itself)
 summary(fit_pcr)
 
-
-# 6. Ridge regression on all 28 numerical predictors + dummies, as in the lecture code of week 3
+# 6. Ridge regression on the 28 numerical predictors + dummies
 
 form_x <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
-y      <- train_data$log_revenue                     # y variable
-X      <- model.matrix(form_x, data = train_data)    # predictor variables (as a matrix, with dummies)
+y      <- train_data$log_revenue                     # dependent variable
+X      <- model.matrix(form_x, data = train_data)    # predictor variables as a matrix, with dummies
 X      <- X[, -1]                                    # remove intercept column (is fitted by glmnet)
 X_test <- model.matrix(form_x, data = test_data)[, -1]
 X_new  <- model.matrix(form_x, data = prediction_new)[, -1]
+stopifnot(ncol(X_new) == ncol(X), ncol(X_test) == ncol(X)) # check: same 50 columns in all three matrices
 
-# make the numerical columns z-scores, with the means and sds of the TRAINING data (also for test and new)
-x_mean <- colMeans(X[, num_vars])
+x_mean <- colMeans(X[, num_vars]) # numerical columns turned into z-scores, with the means and sds of the training data
 x_sd   <- apply(X[, num_vars], 2, sd)
 X[, num_vars]      <- scale(X[, num_vars],      center = x_mean, scale = x_sd)
 X_test[, num_vars] <- scale(X_test[, num_vars], center = x_mean, scale = x_sd)
 X_new[, num_vars]  <- scale(X_new[, num_vars],  center = x_mean, scale = x_sd)
 
 grid <- 10^seq(-5, 2, length.out = 100) # grid of lambdas (wide enough that lambda.min is not at the edge)
-result.ridge <- glmnet(X, y, alpha = 0, lambda = grid, standardize = FALSE) # ridge regression (alpha must be 0 for ridge)
-plot(result.ridge, xvar = "lambda", label = TRUE, las = 1) # coefficient paths: shrink to 0, never exactly 0
+result.ridge <- glmnet(X, y, alpha = 0, lambda = grid, standardize = FALSE) # ridge regression (alpha = 0), already standardised
+plot(result.ridge, xvar = "lambda", label = TRUE, las = 1) # coefficients shrink towards 0 but never become exactly 0
 
-# 10-fold cross validation for ridge regression
-set.seed(123)
+set.seed(123) # 10-fold cross validation
 result.ridge.cv <- cv.glmnet(X, y, alpha = 0, lambda = grid, nfolds = 10, standardize = FALSE)
 print(result.ridge.cv$lambda.min) # best cross validated lambda
-print(result.ridge.cv$lambda.1se) # conservative est. of best lambda (1 stdev)
+print(result.ridge.cv$lambda.1se) # 1se rule: largest lambda within one standard error of the minimum
 
-# to plot root mean squared error (rmse) to be on the same scale as y:
-result.ridge.cv$cvm  <- result.ridge.cv$cvm^0.5
+result.ridge.cv$cvm  <- result.ridge.cv$cvm^0.5 # mse -> rmse, on the same scale as y
 result.ridge.cv$cvup <- result.ridge.cv$cvup^0.5
 result.ridge.cv$cvlo <- result.ridge.cv$cvlo^0.5
 plot(result.ridge.cv, ylab = "Root Mean-Squared Error")
 
-# final runs with lambda.min and lambda.1se
-result.ridge.min <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.min, standardize = FALSE)
-result.ridge.1se <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.1se, standardize = FALSE)
-Weights <- cbind(result.ridge.min$beta, result.ridge.1se$beta) # coefficients on log scale (per sd for numerical predictors)
+result.ridge.min <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.min, standardize = FALSE) # final runs with lambda.min
+result.ridge.1se <- glmnet(X, y, alpha = 0, lambda = result.ridge.cv$lambda.1se, standardize = FALSE) # and lambda.1se
+Weights <- cbind(result.ridge.min$beta, result.ridge.1se$beta) # coefficients on log scale (per sd for the numerical predictors)
 colnames(Weights) <- c("lambda.min", "lambda.1se")
 round(Weights, digits = 3)
-
 
 # 7. Evaluation on log scale and on revenue scale
 
@@ -310,7 +271,7 @@ pred_log <- list( # test predictions of log revenue
   "PCR"              = as.numeric(predict(fit_pcr, newdata = test_scores)),
   "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X_test)),
   "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X_test)))
-fit_log <- list( # fitted values on the training set, for the smearing factor
+fit_log <- list( # fitted values on the training set, needed for the smearing factor
   "PCR"              = as.numeric(fitted(fit_pcr)),
   "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X)),
   "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X)))
@@ -341,7 +302,7 @@ err_by_class <- data.frame(classification = test_data$classification, # where do
   arrange(desc(MAE_rev_M))
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
-op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue; points on the red line = perfect prediction
+op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue, red line = perfect prediction
 plot(pred_log[["PCR"]], y_test, pch = 20, col = "grey40", las = 1, main = "PCR",
      xlab = "Predicted log revenue", ylab = "Observed log revenue")
 abline(0, 1, col = "red")
@@ -349,7 +310,6 @@ plot(pred_log[["Ridge lambda.min"]], y_test, pch = 20, col = "grey40", las = 1, 
      xlab = "Predicted log revenue", ylab = "Observed log revenue")
 abline(0, 1, col = "red")
 par(op)
-
 
 # 8. Predictions for the 10 institutions, with the same models that were evaluated on the test set
 
@@ -365,3 +325,5 @@ pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$c
                        rev_Ridge_mean_M   = exp(pl_ridge) * smear["Ridge lambda.min"] / 1e6)
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
+
+## NA

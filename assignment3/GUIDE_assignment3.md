@@ -1,11 +1,19 @@
 # Assignment 3 – Revenue of US college athletics programs: step-by-step guide
 
-The code is in `assignment3/assignment3_code.Rmd`, with our own variable names (`athletics_new`,
+The code is in the report file `assignment3/assignment3_report.Rmd`, with our own variable names (`athletics_new`,
 `prediction_new`, `fixed_coaches()`, …). From Part 3 on it follows the **lecture code**:
 - the train/test split uses `createDataPartition()`, as in the penalized regression code;
 - PCA uses `princomp()`, `permtestPCA()` and the bootstrap of the eigenvalues, as in Week 5;
 - ridge regression uses `model.matrix()`, z-scores and `glmnet()`/`cv.glmnet()` with a lambda
   grid and an RMSE plot, as in Week 3.
+
+**How the report file is built:** all code chunks come first, right after the YAML header,
+with `include=FALSE`. They run silently, so every result exists before the text sections, and
+you can use numbers in the text with inline R, e.g. `` `r round(eval_tab$RMSE_log[1], 3)` ``.
+At the end, the appendix chunk
+`` ```{r appendix-code, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE} `` prints all the
+code once, without running it again. Chunks placed after the text with `include=FALSE` would
+show nothing in the PDF.
 
 Put the `.Rmd` in the same folder as `data_783996yw.csv` and `predictions-2.csv`. The lecture
 function `permtestPCA()` is defined in the setup chunk, so no extra file is needed. No `setwd()` is needed.
@@ -443,6 +451,15 @@ projected on the training PCA and standardised with the training means and sds. 
   - The factor lines changed `prediction` instead of `prediction_new`.
   - `logged_vars()` was defined but never applied.
   - `setwd()` inside a chunk is reset after that chunk, so it was removed.
+- **Bugs fixed in the report draft:**
+  - A missing `)` at the end of the `prediction_new$sector <- factor(...)` line. R then reads
+    the next lines as part of that call, so the chunk fails.
+  - A chunk label with a `/` (`train/test split`). knitr uses labels in file names, so a `/`
+    can break the figure paths. It is renamed `split`.
+  - The last chunk had no closing ```` ``` ````.
+  - The title still said Assignment 2.
+  - The appendix chunks had `include=FALSE`, so no code would appear in the PDF. They are now
+    run at the top and printed in the appendix with `ref.label`.
 
 ## Things you may want to change
 - **Number of PCs:** the line `n_pc <- k_perm` in the PCA chunk (Part 4c). With 5 PCs (the
