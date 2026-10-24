@@ -11,6 +11,37 @@ you copy anything into the report.
 
 ---
 
+## Background: what the data are (EADA)
+
+The data come from the **Equity in Athletics Disclosure Act (EADA)** survey of the US
+Department of Education ([ope.ed.gov/athletics](https://ope.ed.gov/athletics/#/)). Every
+co-educational institution that receives federal student aid (Title IV) and runs
+intercollegiate athletics must fill it in every year. These definitions matter for the analysis:
+
+| Variable | EADA definition | Why it matters |
+|---|---|---|
+| `revenue` | Grand total revenue: all revenue attributable to intercollegiate athletics. That includes tickets, media rights, donations, conference distributions, student fees and **institutional support** (money from the school itself). | The instructions say grand total revenue **must cover grand total expenses**: a deficit is filled with institutional support, which counts as revenue. For most smaller programs, revenue therefore measures the **athletics budget**, not money earned. |
+| `athletes_*` | Unduplicated head count: an athlete on several teams counts once. Participants are counted as of the day of the first scheduled contest. | `partic_*` counts per team, so the sum of the men's `partic_*` variables is larger than `athletes_men` at 57% of schools (e.g. track and cross country athletes). |
+| `hc_*`, `ac_*` | Coaches reported per men's/women's team. | No teams → no coaches → NaN. |
+| `*_salary_*` | Average salary per coaching position, coaching duties only (salary + bonuses, **no benefits**). Volunteers are left out of the average. | Very low averages (a few thousand USD) indicate part-time coaches. NaN with coaches present may mean "all volunteers". |
+
+**Consequences for the report**
+- Because revenue must cover expenses, revenue and spending (salaries, number of coaches)
+  are close to two sides of the same budget. The strong correlations are partly mechanical
+  (compare the Assignment 2 discussion on mechanically related variables). This supports a
+  **prediction** framing, not a causal one.
+- The extreme right tail is real: only the large NCAA Division I programs (mostly FBS) earn
+  large media, ticket and donation income. These values are not data errors and should not
+  be removed.
+- Revenue is in nominal USD for a single reporting year, so no inflation correction is needed.
+
+> **Note:** the ope.ed.gov site could not be reached from the environment where this guide
+> was written. The definitions above come from the official EADA survey instructions as they
+> are quoted in institutions' published EADA reports (sources at the end). Check the wording
+> against the "User's Guide" on the EADA site before you cite it.
+
+---
+
 ## Suggested research question
 
 The assignment asks for prediction, not causation. A research question that fits the data
@@ -44,8 +75,10 @@ by classification.
   So the NaN means *no coaches*, not *unknown*.
 - `ac_men` and `ac_women` are never 0 in the data (the minimum is 1). So NaN most likely
   encodes 0 assistant coaches, and then the salary is not applicable.
-- 9 (men) and 7 (women) institutions report assistant coaches but **no salary**. These are
-  the only values that are genuinely missing.
+- 9 (men) and 7 (women) institutions report assistant coaches but **no salary**. EADA leaves
+  volunteers out of the average salary, so these could be institutions with only volunteer
+  assistants. We cannot verify that, so the script treats them as genuinely missing and
+  imputes them. Mention this in the report: setting them to 0 is a defensible alternative.
 - Revenue skewness is 4.5 on the raw scale and 0.09 on the log scale. Median log revenue
   rises steeply with division: FBS programs earn about 118M, NJCAA III programs about 0.6M.
 
@@ -61,6 +94,8 @@ by classification.
 
 **Guiding questions**
 - Why is 0 the right value for "no coaches", while a median would be wrong there?
+- For the 16 salaries with coaches present: are these volunteers (salary 0) or unreported
+  values (impute)? Use the EADA salary definition in your argument.
 - Why do the 16 genuinely missing salaries get the *training* median (Part 3) and not the
   full-data median? (Leakage: the test set must stay unseen.)
 - Should you also log the predictors? PCA is based on correlations, which are linear and
@@ -81,6 +116,8 @@ correlations of each predictor with log revenue.
 - Which predictors correlate most with log revenue? Here: athletes_women 0.81,
   hc_salary_men 0.78, and the coaching counts about 0.74. `hc_female_share` (0.13) is
   almost unrelated.
+- Why are spending variables (salaries, coaches) so strongly correlated with revenue? Use the
+  EADA rule that revenue must cover expenses.
 - Many predictors correlate strongly with each other (size). Why does that motivate PCA
   and ridge regression rather than OLS? (Think back to Assignment 1.)
 
@@ -275,3 +312,16 @@ preprocessing to `predictions.csv` and reports log predictions, a *median-type* 
   transformation) → Methods (PCA plus criteria, permutation test, bootstrap; PCR; ridge;
   back-transformation) → Results → Discussion/Conclusion. Tables of loadings, coefficients and
   bootstrap CIs go in the appendix.
+
+---
+
+## Sources
+- US Department of Education, EADA data: [ope.ed.gov/athletics](https://ope.ed.gov/athletics/#/)
+- Official EADA instructions, Total Revenues screen: [surveys.ope.ed.gov (inst_1.pdf)](https://surveys.ope.ed.gov/athletics2025/wwwroot/documents/inst_1.pdf)
+- Example EADA survey forms quoting the instructions (unduplicated count, first scheduled
+  contest, salary definitions, volunteers): [Linfield University 2024](https://linfield.edu/assets/files/sports/2024-EADA-Survey.pdf),
+  [DePauw University 2021](https://depauw.edu/files/resources/2021-eada-survey.pdf),
+  [Rollins College 2021](https://rpublic.rollins.edu/sites/IR/Athletic%20Information/2021%20EADA%20Survey%20.pdf)
+- Revenue structure (team revenue + "not allocated" revenue = grand total):
+  [University of Oklahoma 2025 report](https://soonersports.com/documents/download/2026/2/16/EADA_FY25.pdf),
+  [Harrisburg University 2024–25 report](https://www.harrisburgu.edu/wp-content/uploads/2024-2025-EADA-Report.pdf)

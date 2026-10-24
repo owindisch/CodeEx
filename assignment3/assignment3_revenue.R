@@ -16,6 +16,29 @@
 ##
 ## Run from the repository root:  Rscript assignment3/assignment3_revenue.R
 ## ============================================================
+##
+## About the data (Equity in Athletics Disclosure Act, EADA):
+## - Source: the EADA survey of the US Department of Education
+##   (https://ope.ed.gov/athletics/). Every co-educational institution that
+##   receives federal student aid (Title IV) and has intercollegiate
+##   athletics must report each year. Each row = one institution, one year.
+## - revenue = "grand total revenue": all revenue attributable to
+##   intercollegiate athletics, including ticket sales, media rights,
+##   donations, conference distributions, student fees and institutional
+##   support (money from the institution itself).
+## - The instructions say grand total revenues must COVER grand total
+##   expenses: if a program runs a deficit, the institution's subsidy is
+##   counted as revenue. For many (especially smaller) schools, revenue is
+##   therefore close to the program's BUDGET, not money "earned". This
+##   explains why staff and salaries predict revenue so well.
+## - Athletes (athletes_men/women) are an unduplicated head count: an
+##   athlete on several teams counts once. The partic_* variables count per
+##   team, so a track athlete who also runs cross country counts twice there.
+##   Participants are counted as of the day of the first scheduled contest.
+## - Coach salaries are averages per head/assistant coaching position, for
+##   coaching duties only (salary + bonuses paid by the institution, without
+##   benefits). Volunteer coaches are left out of the average salary.
+## ============================================================
 
 
 ## ============================================================
@@ -73,8 +96,11 @@ table(no_women_teams = athletics$teams_women == 0, hc_women_missing = is.na(athl
 # ac_men / ac_women are never 0 in the data (min = 1), so NaN most likely
 # means "no assistant coaches". The salary is then not applicable.
 min(athletics$ac_men, na.rm = TRUE)
-# A few institutions DO report assistant coaches but no salary:
-# these are genuinely missing values.
+# A few institutions DO report assistant coaches but no salary.
+# EADA leaves volunteer coaches out of the average salary, so a plausible
+# reason is that all of these assistants are volunteers (salary would then
+# be "none"). We cannot verify this, so we treat them as genuinely missing
+# and impute them in Part 3. Mention this choice in the report.
 sum(!is.na(athletics$ac_men)   & is.na(athletics$ac_salary_men))
 sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women))
 
@@ -85,6 +111,8 @@ table(athletics$sector)
 
 # Histograms of revenue on the original scale and on the log scale.
 # The original scale is extremely right-skewed; the log is roughly symmetric.
+# The long right tail comes from big-time college sports (NCAA Division
+# I-FBS): media rights, ticket sales and donations, mostly from football.
 p_rev <- ggplot(athletics, aes(revenue / 1e6)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "white") +
   labs(title = "Revenue of athletics programs", x = "Revenue (million USD)", y = "Count") +
@@ -127,6 +155,8 @@ num_vars    <- c(count_vars, salary_vars, share_vars)   # all 28 numerical predi
 # Step 1: structural NaNs -> 0.
 # A missing coach count means "no coaches of this type", so set it to 0.
 # If there are no coaches, their salary is also set to 0 (nothing is paid).
+# Note: EADA asks for coaches per team, so a school without men's teams
+# reports no men's head coaches, which matches the tables in Part 1.
 # The loop runs once for the men's and once for the women's variables.
 fix_structural <- function(d) {
   for (s in c("men", "women")) {
@@ -220,7 +250,9 @@ prediction <- impute(prediction)
 stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(prediction[num_vars]))
 
 # Correlation of every predictor with log revenue, sorted from high to low
-# (exploration only: correlation, not causation)
+# (exploration only: correlation, not causation). Remember that revenue
+# must cover expenses in EADA: salaries and staff are partly a mirror of
+# revenue (the budget), not only a cause of it.
 cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE)
 print(round(cor_tab, 2))
 
@@ -502,7 +534,9 @@ abline(v = log(c(cv_ridge$lambda.min, cv_ridge$lambda.1se)), lty = 2)
 dev.off()
 
 # Coefficient table at both lambdas (log scale: a coefficient b means
-# roughly exp(b) times the revenue, holding the other variables fixed)
+# roughly exp(b) times the revenue, holding the other variables fixed).
+# Large positive dummies for NCAA Division I reflect media rights, tickets
+# and conference distributions, which smaller divisions barely have.
 ridge_coef <- data.frame(
   Variable   = rownames(coef(cv_ridge, s = "lambda.min")),
   lambda_min = as.numeric(coef(cv_ridge, s = "lambda.min")),
