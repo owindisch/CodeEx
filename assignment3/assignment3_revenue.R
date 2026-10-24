@@ -46,39 +46,39 @@ save_plot <- function(p, name, w = 7, h = 4.5) {
 # - Which variables contain NaN, and is the NaN "unknown" or "not applicable"?
 # - How skewed is revenue? Which classifications have the largest programs?
 
-raw  <- read.csv(file.path(data_dir, "data_783996yw.csv"))
+athletics <- read.csv(file.path(data_dir, "data_783996yw.csv"))
 newx <- read.csv(file.path(data_dir, "predictions.csv"))
 
-dim(raw)
-str(raw)
-summary(raw$revenue)
+dim(athletics)
+str(athletics)
+summary(athletics$revenue)
 
 # Missing values per variable
-na_counts <- colSums(is.na(raw))
+na_counts <- colSums(is.na(athletics))
 na_counts[na_counts > 0]
 
 # Is the missingness structural? An institution without men's teams
 # cannot have men's head coaches, so hc_men = NaN there means "none".
-table(no_men_teams = raw$teams_men == 0, hc_men_missing = is.na(raw$hc_men))
-table(no_women_teams = raw$teams_women == 0, hc_women_missing = is.na(raw$hc_women))
+table(no_men_teams = athletics$teams_men == 0, hc_men_missing = is.na(athletics$hc_men))
+table(no_women_teams = athletics$teams_women == 0, hc_women_missing = is.na(athletics$hc_women))
 # ac_men / ac_women are never 0 in the data (min = 1), so NaN most likely
 # means "no assistant coaches". The salary is then not applicable.
-min(raw$ac_men, na.rm = TRUE)
+min(athletics$ac_men, na.rm = TRUE)
 # A few institutions DO report assistant coaches but no salary:
 # these are genuinely missing values.
-sum(!is.na(raw$ac_men)   & is.na(raw$ac_salary_men))
-sum(!is.na(raw$ac_women) & is.na(raw$ac_salary_women))
+sum(!is.na(athletics$ac_men)   & is.na(athletics$ac_salary_men))
+sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women))
 
 # Categorical variables
-table(raw$classification)
-table(raw$sector)
+table(athletics$classification)
+table(athletics$sector)
 
 # Revenue: raw vs log
-p_rev <- ggplot(raw, aes(revenue / 1e6)) +
+p_rev <- ggplot(athletics, aes(revenue / 1e6)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "white") +
   labs(title = "Revenue of athletics programs", x = "Revenue (million USD)", y = "Count") +
   theme_minimal()
-p_logrev <- ggplot(raw, aes(log(revenue))) +
+p_logrev <- ggplot(athletics, aes(log(revenue))) +
   geom_histogram(bins = 50, fill = "steelblue", color = "white") +
   labs(title = "Log revenue", x = "log(revenue)", y = "Count") +
   theme_minimal()
@@ -86,7 +86,7 @@ save_plot(p_rev, "revenue_hist.png")
 save_plot(p_logrev, "log_revenue_hist.png")
 
 # Revenue by classification (helps the story: FBS schools are a world apart)
-p_class <- ggplot(raw, aes(x = reorder(classification, revenue, median), y = log(revenue))) +
+p_class <- ggplot(athletics, aes(x = reorder(classification, revenue, median), y = log(revenue))) +
   geom_boxplot(fill = "lightblue") + coord_flip() +
   labs(title = "Log revenue by classification", x = NULL, y = "log(revenue)") +
   theme_minimal()
@@ -104,7 +104,7 @@ save_plot(p_class, "log_revenue_by_class.png", h = 5.5)
 
 count_vars  <- c("ugrad_men", "ugrad_women", "athletes_men", "athletes_women",
                  "teams_men", "teams_women",
-                 grep("^partic_", names(raw), value = TRUE),
+                 grep("^partic_", names(athletics), value = TRUE),
                  "hc_men", "hc_women", "ac_men", "ac_women")
 salary_vars <- c("hc_salary_men", "hc_salary_women", "ac_salary_men", "ac_salary_women")
 share_vars  <- c("hc_fulltime_share", "hc_female_share")
@@ -132,7 +132,7 @@ transform_vars <- function(d) {
   d
 }
 
-dat  <- raw  %>% fix_structural()
+dat  <- athletics %>% fix_structural()
 newx <- newx %>% fix_structural()
 
 # Remaining (genuine) missing values: only salaries of existing coaches
