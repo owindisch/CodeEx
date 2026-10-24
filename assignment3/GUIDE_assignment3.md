@@ -181,7 +181,7 @@ could run it both ways and say whether the choice matters (only 16 of 1000 value
 
 **What the code does:** an 80/20 split with `createDataPartition(athletics_new$log_revenue,
 p = 0.8)`, as in the lecture code. It splits within quantiles of log revenue, so train and test
-have a similar spread of small and big programs. It gives 802 training and 198 test
+have a similar spread of small and big programs. It gives 800 training and 200 test
 institutions. It then computes the imputation medians on the training set only and applies
 them to `train_data`, `test_data` and `prediction_new`. A `stopifnot()` check confirms that no
 NA is left. Finally it prints the correlations of each predictor with log revenue.
@@ -338,7 +338,7 @@ Division I without football +1.54 relative to CCCAA.
 - Final runs at λ_min and λ_1se, with a coefficient table (`Weights`).
 
 **Results:** λ_min = 0.0005 and λ_1se = 0.0093. Both are very small: cross-validation prefers
-almost no shrinkage. With 802 institutions and 50 coefficients, there is enough data for nearly
+almost no shrinkage. With 800 institutions and 50 coefficients, there is enough data for nearly
 unpenalised estimates, so ridge at λ_min is close to OLS. λ_1se shrinks more: for example, the
 FBS dummy goes from +1.94 to +1.19. The largest effects are the division dummies (FBS +1.94,
 D-I without football +1.33, FCS +1.21 at λ_min), then `hc_salary_men` (+0.24),
