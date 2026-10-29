@@ -352,7 +352,7 @@ Intercollegiate athletic programs are an important part of higher education in t
 
 # 2. Data
 
-The data come from the Equity in Athletics Disclosure Act (EADA) survey of the US Department of Education. Every co-educational college or university that participates in federal student aid programs and has at least one intercollegiate athletic program annually reports information about its programs (USDE, 2026). The dataset used for this report contains 1,000 institutions. Two variables are categorical: the athletic association and division of the institution (19 levels, e.g. NCAA Division I-FBS) and its sector (5 levels, e.g. private nonprofit, 4-year or above). The other 28 variables, which are used as predictors, describe undergraduate enrollment, the number of athletes and teams, the participants per sport, the number and average salaries of head and assistant coaches, and the shares of full-time and female head coaches, mostly separately for men and women. The number of athletes counts each athlete once, while the participants per sport count an athlete once for every team they are on (USDE, 2026). The unit ID identifies the institution and is not used as a predictor. The variable of interest is the total revenue of the athletic program, which includes, for example, ticket sales, media rights, donations and support from the institution itself. Since revenue has to cover the expenses of the program, a deficit paid by the institution also counts as revenue (USDE, 2025). Revenue is very right-skewed: it ranges from \$13,766 to \$289.6 million, with a median of \$4.1 million and a mean of \$14.3 million (Appendix, Figure 1). Therefore, the logarithm of revenue, which is much more symmetric, is used as the dependent variable.
+The data come from the Equity in Athletics Disclosure Act (EADA) survey of the US Department of Education. Every co-educational college or university that participates in federal student aid programs and has at least one intercollegiate athletic program annually reports information about its programs (USDE, 2026). The dataset used for this report contains 1,000 institutions. Two variables are categorical: the athletic association and division of the institution (19 levels, e.g. NCAA Division I-FBS) and its sector (5 levels, e.g. private nonprofit, 4-year or above). The other 28 variables, which are used as predictors, describe undergraduate enrollment, the number of athletes and teams, the participants per sport, the number and average salaries of head and assistant coaches, and the shares of full-time and female head coaches, mostly separately for men and women. The number of athletes counts each athlete once, while the participants per sport count an athlete once for every team they are on (USDE, 2026). The unit ID identifies the institution and is not used as a predictor. The variable of interest is the total revenue of the athletic program, which includes, for example, ticket sales, media rights, donations and support from the institution itself. Since revenue has to cover the expenses of the program, a deficit paid by the institution also counts as revenue (USDE, 2025). Revenue is very right-skewed: it ranges from \$13,766 to \$289.6 million, with a median of \$4.1 million and a mean of \$14.3 million (see the histograms in the Appendix). Therefore, the logarithm of revenue, which is much more symmetric, is used as the dependent variable.
 
 To evaluate the predictions on data that are not used for estimation, the 1,000 institutions are randomly split into a training set of 800 institutions (80%) and a test set of 200 institutions (20%). The split is stratified on log revenue, so that both sets contain small as well as large programs.
 
@@ -398,6 +398,60 @@ Both models are estimated on the training set and compared on the test set with 
 
 # 4. Results
 
+```{r res-values, include=FALSE}
+fbs      <- "classificationNCAA Division I-FBS"
+pcr_sum  <- summary(fit_pcr)
+share_fbs <- err_by_class$share_of_squared_err[err_by_class$classification == "NCAA Division I-FBS"]
+n_fbs     <- err_by_class$n[err_by_class$classification == "NCAA Division I-FBS"]
+share_d1  <- sum(err_by_class$share_of_squared_err[grepl("NCAA Division I", err_by_class$classification) &
+                                                   !grepl("Division II", err_by_class$classification)])
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+Table 1 summarises the selection of the number of principal components. The first component has an eigenvalue of `r f2(eigenvalues[1])` and accounts for `r f2(100 * vaf[1], 1)`% of the variance of the 28 predictors, after which the eigenvalues drop quickly. The scree plot (not shown) has an elbow at the third component, so the scree criterion suggests two components. The simple rules give more components: Kaiser's rule selects `r k_kaiser` components and an 80% cumulative VAF requires `r k_vaf80` components. However, components 4 to 6 have eigenvalues only just above 1. The permutation test shows that only the first `r k_perm` eigenvalues are larger than the 97.5% percentile of the permuted eigenvalues, and the bootstrapped Kaiser rule keeps `r k_kaiser_boot` components, as the interval of component 6 contains 1. As the permutation test is the most formal criterion, `r n_pc` components are retained. Together they explain `r f2(100 * cum_vaf[n_pc], 1)`% of the variance, with a narrow 95% bootstrap interval of [`r f2(100 * perc.alpha[1], 1)`%, `r f2(100 * perc.alpha[2], 1)`%], so the solution is stable.
+
+```{r tab-pca, echo=FALSE}
+tab_pca <- data.frame(Component = 1:6,
+                      Eigenvalue = eigenvalues[1:6],
+                      VAF = 100 * vaf[1:6],
+                      `Cumulative VAF` = 100 * cum_vaf[1:6],
+                      `Permutation 97.5%` = perm_range[1:6, 2],
+                      `Bootstrap 95% CI` = paste0("[", f2(kaiser_boot$Lower[1:6]), ", ", f2(kaiser_boot$Upper[1:6]), "]"),
+                      check.names = FALSE)
+knitr::kable(tab_pca, digits = 2, booktabs = TRUE, row.names = FALSE,
+             caption = "Eigenvalues, VAF (in \\%), upper bound of the permutation test and bootstrap confidence intervals of the eigenvalues for the first six components.")
+```
+
+The component loadings (Table 4 in the Appendix) and the biplots (Figure 1) allow an interpretation of the three components. All variables correlate positively with the first component, most strongly the number of athletes, teams and coaches (correlations of about 0.86 to 0.94). This component can be named *program size*. The second component correlates positively with undergraduate enrollment, all coach salaries and the share of full-time head coaches, and negatively with the number of teams, head coaches and men's soccer participants. It separates programs at large institutions that pay their coaches well from programs that offer many sports with relatively low salaries, and can be named *professionalisation versus breadth*. The third component contrasts track and field and other individual sports at larger institutions (positive) with basketball, baseball and softball (negative), and can be named *individual sports versus traditional team sports*. The fit per variable shows that most variables are well represented, but the share of female head coaches (fit `r f2(fit_var["hc_female_share", "Fit"])`) and football participation (fit `r f2(fit_var["partic_football", "Fit"])`) are not.
+
+```{r fig-biplot, echo=FALSE, fig.cap="Biplots of components 1 and 2 (left) and components 2 and 3 (right). Points are institutions, arrows are variables.", fig.width=7.5, fig.height=4.2}
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("grey60", "red"),
+       asp = 1, cex = c(0.4, 0.5), xlabs = rep("o", nrow(X_pca)), main = "Components 1 and 2")
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 2:3, col = c("grey60", "red"),
+       asp = 1, cex = c(0.4, 0.5), xlabs = rep("o", nrow(X_pca)), main = "Components 2 and 3")
+par(op)
+```
+
+In the PCR, the three components and the classification and sector dummies explain `r f2(100 * pcr_sum$r.squared, 1)`% of the variance of log revenue in the training data. Program size ($t$ = `r f2(pcr_sum$coefficients["Comp.1", "t value"], 1)`) and professionalisation ($t$ = `r f2(pcr_sum$coefficients["Comp.2", "t value"], 1)`) are strongly related to revenue, while the third component is not significant ($t$ = `r f2(pcr_sum$coefficients["Comp.3", "t value"], 2)`). The division matters a lot: holding the components constant, an NCAA Division I-FBS program has a log revenue that is `r f2(coef(fit_pcr)[fbs])` higher than a CCCAA program, which corresponds to about `r round(exp(coef(fit_pcr)[fbs]))` times as much revenue. In the ridge regression, cross-validation selects a very small penalty ($\lambda_{\min}$ = `r formatC(result.ridge.cv$lambda.min, format = "e", digits = 1)`, $\lambda_{1SE}$ = `r formatC(result.ridge.cv$lambda.1se, format = "e", digits = 1)`), so the estimates at $\lambda_{\min}$ are close to OLS. With `r nrow(train_data)` training observations, little shrinkage is needed. The largest ridge coefficients (Table 5 in the Appendix) again belong to the division dummies (FBS: `r f2(Weights[fbs, "lambda.min"])`), followed by the head coach salary of men's teams (`r f2(Weights["hc_salary_men", "lambda.min"])` per standard deviation), the number of women athletes and the number of men's head coaches.
+
+```{r tab-eval, echo=FALSE}
+tab_eval <- eval_tab
+tab_eval$Model <- c("PCR", "Ridge ($\\lambda_{\\min}$)", "Ridge ($\\lambda_{1SE}$)")
+names(tab_eval) <- c("Model", "RMSE (log)", "$R^2$ (log)", "RMSE (million USD)")
+knitr::kable(tab_eval, digits = 3, booktabs = TRUE, row.names = FALSE, escape = FALSE,
+             caption = "Predictive performance on the test set.")
+```
+
+Table 2 shows that both models predict log revenue well on the test set. The PCR has the lowest RMSE on the log scale (`r f2(eval_tab$RMSE_log[1], 3)`, $R^2$ = `r f2(eval_tab$R2_log[1], 3)`), so three general components and the division already contain almost all information of the 28 separate characteristics. An RMSE of about 0.43 on the log scale means that predictions are typically off by a factor of about $\exp(0.43) \approx 1.5$. On the original scale, the ranking changes: ridge regression with $\lambda_{\min}$ has the lowest RMSE (`r f2(eval_tab$RMSE_rev_M[2], 2)` million USD). The errors in USD are dominated by the largest programs: the `r n_fbs` FBS programs in the test set cause `r round(100 * share_fbs)`% of the squared error in USD, and all NCAA Division I programs together `r round(100 * share_d1)`%. On the log scale, these programs are not predicted worse than smaller programs. Table 3 reports the predicted revenue of the 10 new institutions, transformed back with $\exp(\cdot)$. Both models give similar predictions, except for institution 1, an FBS program with a very high head coach salary, where ridge regression predicts a much higher revenue than PCR.
+
+```{r tab-pred, echo=FALSE}
+tab_pred <- pred_out
+names(tab_pred) <- c("ID", "Classification", "PCR", "Ridge")
+knitr::kable(tab_pred, digits = 1, booktabs = TRUE, row.names = FALSE,
+             caption = "Predicted revenue (in million USD) of the 10 institutions.")
+```
+
 # 5. Conclusions and Discussion
 
 # References
@@ -412,6 +466,17 @@ US Department of Education (USDE). (2025). *EADA survey: Total revenues screen i
 
 ```{r fig-revenue, echo=FALSE, fig.cap="Distribution of revenue (left) and log revenue (right).", fig.height=2.6}
 grid.arrange(revenue, logrevenue, ncol = 2)
+```
+
+```{r tab-loadings, echo=FALSE}
+knitr::kable(fit_var, digits = 2, booktabs = TRUE,
+             col.names = c("Component 1", "Component 2", "Component 3", "Fit"),
+             caption = "Component loadings (correlations between variables and component scores) and fit per variable.")
+```
+
+```{r tab-ridge, echo=FALSE}
+knitr::kable(as.matrix(Weights), digits = 3, booktabs = TRUE,
+             caption = "Ridge regression coefficients (numerical predictors per standard deviation).")
 ```
 
 \newpage

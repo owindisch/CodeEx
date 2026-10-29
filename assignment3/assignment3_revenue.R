@@ -315,4 +315,47 @@ pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$c
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
 
+fbs      <- "classificationNCAA Division I-FBS"
+pcr_sum  <- summary(fit_pcr)
+share_fbs <- err_by_class$share_of_squared_err[err_by_class$classification == "NCAA Division I-FBS"]
+n_fbs     <- err_by_class$n[err_by_class$classification == "NCAA Division I-FBS"]
+share_d1  <- sum(err_by_class$share_of_squared_err[grepl("NCAA Division I", err_by_class$classification) &
+                                                   !grepl("Division II", err_by_class$classification)])
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
+
+tab_pca <- data.frame(Component = 1:6,
+                      Eigenvalue = eigenvalues[1:6],
+                      VAF = 100 * vaf[1:6],
+                      `Cumulative VAF` = 100 * cum_vaf[1:6],
+                      `Permutation 97.5%` = perm_range[1:6, 2],
+                      `Bootstrap 95% CI` = paste0("[", f2(kaiser_boot$Lower[1:6]), ", ", f2(kaiser_boot$Upper[1:6]), "]"),
+                      check.names = FALSE)
+knitr::kable(tab_pca, digits = 2, booktabs = TRUE, row.names = FALSE,
+             caption = "Eigenvalues, VAF (in \\%), upper bound of the permutation test and bootstrap confidence intervals of the eigenvalues for the first six components.")
+
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("grey60", "red"),
+       asp = 1, cex = c(0.4, 0.5), xlabs = rep("o", nrow(X_pca)), main = "Components 1 and 2")
+biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 2:3, col = c("grey60", "red"),
+       asp = 1, cex = c(0.4, 0.5), xlabs = rep("o", nrow(X_pca)), main = "Components 2 and 3")
+par(op)
+
+tab_eval <- eval_tab
+tab_eval$Model <- c("PCR", "Ridge ($\\lambda_{\\min}$)", "Ridge ($\\lambda_{1SE}$)")
+names(tab_eval) <- c("Model", "RMSE (log)", "$R^2$ (log)", "RMSE (million USD)")
+knitr::kable(tab_eval, digits = 3, booktabs = TRUE, row.names = FALSE, escape = FALSE,
+             caption = "Predictive performance on the test set.")
+
+tab_pred <- pred_out
+names(tab_pred) <- c("ID", "Classification", "PCR", "Ridge")
+knitr::kable(tab_pred, digits = 1, booktabs = TRUE, row.names = FALSE,
+             caption = "Predicted revenue (in million USD) of the 10 institutions.")
+
 grid.arrange(revenue, logrevenue, ncol = 2)
+
+knitr::kable(fit_var, digits = 2, booktabs = TRUE,
+             col.names = c("Component 1", "Component 2", "Component 3", "Fit"),
+             caption = "Component loadings (correlations between variables and component scores) and fit per variable.")
+
+knitr::kable(as.matrix(Weights), digits = 3, booktabs = TRUE,
+             caption = "Ridge regression coefficients (numerical predictors per standard deviation).")
