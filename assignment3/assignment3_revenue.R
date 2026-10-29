@@ -271,14 +271,7 @@ pred_log <- list( # test predictions of log revenue
   "PCR"              = as.numeric(predict(fit_pcr, newdata = test_scores)),
   "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X_test)),
   "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X_test)))
-fit_log <- list( # fitted values on the training set, needed for the smearing factor
-  "PCR"              = as.numeric(fitted(fit_pcr)),
-  "Ridge lambda.min" = as.numeric(predict(result.ridge.min, newx = X)),
-  "Ridge lambda.1se" = as.numeric(predict(result.ridge.1se, newx = X)))
-
-# exp(log prediction) estimates the MEDIAN revenue and underestimates the mean (jensen's inequality)
-# duan's smearing factor = mean(exp(training residuals)); exp(pred) * smear estimates the MEAN revenue
-smear <- sapply(fit_log, function(f) mean(exp(y - f)))
+# exp(log prediction) transforms the predictions back to usd; it estimates the median revenue and underestimates the mean
 
 rev_test <- test_data$revenue
 eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { # one row per model
@@ -286,20 +279,18 @@ eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { # one row per m
   data.frame(Model = m,
              RMSE_log = rmse(y_test, pl),                                  # error on log scale (~ relative error)
              R2_log   = 1 - sum((y_test - pl)^2) / sum((y_test - mean(y_test))^2),
-             RMSE_rev_naive_M = rmse(rev_test, exp(pl)) / 1e6,             # error in million usd, plain exp()
-             RMSE_rev_smear_M = rmse(rev_test, exp(pl) * smear[m]) / 1e6,  # error in million usd, with smearing
-             Smearing = smear[m])
+             RMSE_rev_M = rmse(rev_test, exp(pl)) / 1e6)                    # error in million usd, after exp()
 }))
 print(eval_tab, digits = 3, row.names = FALSE)
 
 err_by_class <- data.frame(classification = test_data$classification, # where do the dollar errors come from?
-                           abs_err_log = abs(y_test - pred_log[["Ridge lambda.min"]]),
-                           abs_err_rev = abs(rev_test - exp(pred_log[["Ridge lambda.min"]]))) %>%
+                           sq_err_log = (y_test - pred_log[["Ridge lambda.min"]])^2,
+                           sq_err_rev = (rev_test - exp(pred_log[["Ridge lambda.min"]]))^2) %>%
   group_by(classification) %>%
-  summarise(n = n(), MAE_log = mean(abs_err_log), MAE_rev_M = mean(abs_err_rev) / 1e6,
-            share_of_total_abs_err = sum(abs_err_rev)) %>%
-  mutate(share_of_total_abs_err = share_of_total_abs_err / sum(share_of_total_abs_err)) %>%
-  arrange(desc(MAE_rev_M))
+  summarise(n = n(), RMSE_log = sqrt(mean(sq_err_log)), RMSE_rev_M = sqrt(mean(sq_err_rev)) / 1e6,
+            share_of_squared_err = sum(sq_err_rev)) %>%
+  mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% # share of the total squared usd error
+  arrange(desc(RMSE_rev_M))
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
 op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue, red line = perfect prediction
@@ -319,11 +310,9 @@ pl_pcr   <- as.numeric(predict(fit_pcr, newdata = new_scores))     # log revenue
 pl_ridge <- as.numeric(predict(result.ridge.min, newx = X_new))    # X_new was standardised with the training means/sds
 
 pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$classification, # in million usd
-                       rev_PCR_median_M   = exp(pl_pcr) / 1e6,                                  # median-type: exp(pred)
-                       rev_PCR_mean_M     = exp(pl_pcr) * smear["PCR"] / 1e6,                   # mean-type: exp(pred) * smearing
-                       rev_Ridge_median_M = exp(pl_ridge) / 1e6,
-                       rev_Ridge_mean_M   = exp(pl_ridge) * smear["Ridge lambda.min"] / 1e6)
+                       rev_PCR_M   = exp(pl_pcr) / 1e6,     # back to usd with exp()
+                       rev_Ridge_M = exp(pl_ridge) / 1e6)
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
 
-## NA
+grid.arrange(revenue, logrevenue, ncol = 2)

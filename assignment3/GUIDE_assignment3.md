@@ -365,35 +365,32 @@ D-I without football +1.33, FCS +1.21 at λ_min), then `hc_salary_men` (+0.24),
 
 ## Part 7 – Evaluation: log scale vs. revenue scale (required discussion)
 
-**What the code does:** it computes test-set metrics on the log scale (RMSE, R²) and on
-the revenue scale. It back-transforms in two ways:
-- **naive:** `exp(pred)`, which estimates the *median* revenue given x;
-- **smearing:** `exp(pred) × mean(exp(training residuals))` (Duan, 1983), which estimates
-  the *mean* revenue given x.
+**What the code does:** it computes test-set metrics on the log scale (RMSE, R²) and on the
+revenue scale. To get back to USD, the log predictions are transformed with `exp(pred)`. It
+also breaks down the RMSE by classification, and plots observed against predicted log revenue.
+Only methods from the lectures are used (RMSE, R²); the smearing correction and the mean
+absolute error were taken out.
 
-It also breaks down the revenue-scale error by classification, and plots observed against
-predicted log revenue.
+| Model | RMSE log | R² log | RMSE revenue (M$) |
+|---|---|---|---|
+| PCR (3 PCs + dummies) | **0.425** | **0.916** | 9.06 |
+| Ridge λ_min | 0.447 | 0.907 | **8.78** |
+| Ridge λ_1se | 0.456 | 0.903 | 9.38 |
 
-| Model | RMSE log | R² log | RMSE rev (naive, M$) | RMSE rev (smearing, M$) |
-|---|---|---|---|---|
-| PCR (3 PCs + dummies) | **0.425** | **0.916** | 9.06 | 8.68 |
-| Ridge λ_min | 0.447 | 0.907 | **8.78** | **8.43** |
-| Ridge λ_1se | 0.456 | 0.903 | 9.38 | 8.73 |
-
-**Discussion points**
-1. **Jensen's inequality:** E[revenue] = E[exp(log revenue)] > exp(E[log revenue]). Plain
-   `exp()` therefore underestimates the mean revenue. The smearing factor is about 1.06–1.07
-   here, and it lowers the dollar RMSE for every model.
+**Discussion points ("be careful here", as the assignment says)**
+1. **Back-transforming:** `exp(pred)` estimates the *median* revenue for a program with
+   these characteristics, not the mean. Because E[exp(y)] > exp(E[y]), it tends to
+   underestimate the mean revenue, especially when the log errors are large.
 2. **The scale changes what you optimise.** An error of 0.1 on the log scale is about a 10%
    error, whatever the size of the program. On the revenue scale, squared errors are dominated
-   by the largest programs: **the 7 FBS schools in the test set (3.5%) cause 32% of the total
-   absolute error**, and all NCAA Division I schools together cause 62%.
+   by the largest programs: **the 7 FBS schools in the test set (3.5%) cause 71% of the total
+   squared USD error**, and all NCAA Division I schools together cause 89%.
 3. **The model ranking changes:** PCR is best on the log scale, while ridge λ_min is best on
    the revenue scale. The models were fitted to minimise log errors, so they are not optimal
    for dollar errors.
 4. Which metric fits the client? An association with programs of every size probably cares
    about *relative* errors, so the log RMSE makes sense. For budget totals, the dollar error
-   (with the smearing correction) matters.
+   matters.
 5. The differences between the models are small compared with the error itself. Would another
    random split change the ranking?
 
@@ -401,21 +398,21 @@ predicted log revenue.
 
 **What the code does:** it predicts the 10 institutions with the **same models** that were
 evaluated on the test set: the training PCA and PCR, and ridge at λ_min. The new schools are
-projected on the training PCA and standardised with the training means and sds. It reports a
-*median-type* revenue (`exp`) and a *mean-type* revenue (smearing), in million USD.
+projected on the training PCA and standardised with the training means and sds. The log
+predictions are transformed back with `exp()`, in million USD.
 
-| id | Classification | PCR (median / mean, M$) | Ridge (median / mean, M$) |
+| id | Classification | PCR (M$) | Ridge (M$) |
 |---|---|---|---|
-| 1 | NCAA D-I FBS | 115.2 / 123.7 | 142.3 / 151.2 |
-| 2 | NCAA D-I FCS | 17.7 / 19.0 | 18.5 / 19.7 |
-| 3 | NCAA D-I without football | 11.6 / 12.5 | 10.1 / 10.8 |
-| 4 | NCAA D-II with football | 10.5 / 11.2 | 9.3 / 9.9 |
-| 5 | NCAA D-II without football | 4.7 / 5.0 | 3.6 / 3.8 |
-| 6 | NCAA D-III with football | 3.5 / 3.7 | 3.2 / 3.4 |
-| 7 | NCAA D-III without football | 3.7 / 4.0 | 4.1 / 4.3 |
-| 8 | NAIA D-I | 1.7 / 1.8 | 1.7 / 1.8 |
-| 9 | NJCAA D-I | 2.2 / 2.3 | 2.7 / 2.9 |
-| 10 | CCCAA | 4.4 / 4.7 | 4.7 / 5.0 |
+| 1 | NCAA D-I FBS | 115.2 | 142.2 |
+| 2 | NCAA D-I FCS | 17.7 | 18.5 |
+| 3 | NCAA D-I without football | 11.6 | 10.1 |
+| 4 | NCAA D-II with football | 10.5 | 9.3 |
+| 5 | NCAA D-II without football | 4.7 | 3.6 |
+| 6 | NCAA D-III with football | 3.5 | 3.2 |
+| 7 | NCAA D-III without football | 3.7 | 4.1 |
+| 8 | NAIA D-I | 1.7 | 1.7 |
+| 9 | NJCAA D-I | 2.2 | 2.7 |
+| 10 | CCCAA | 4.4 | 4.7 |
 
 **Guiding questions**
 - Are the predictions plausible? Institution 1 has a very high head-coach salary for men's
@@ -426,7 +423,8 @@ projected on the training PCA and standardised with the training means and sds. 
 - Use the training models (as here), or refit on all 1000 institutions? Here we keep the
   models whose test performance we reported. Refitting would use 20% more data, but its
   performance is not measured.
-- Which number do you report: the median-type or the mean-type prediction? Say why.
+- The predictions are median-type estimates (`exp` of a log prediction). Mention this when you
+  report them.
 
 ---
 
