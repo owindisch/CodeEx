@@ -363,13 +363,11 @@ Intercollegiate athletic programs are an important part of higher education in t
 
 # 2. Data
 
-The data come from the Equity in Athletics Disclosure Act (EADA) survey of the US Department of Education. Every co-educational college or university that participates in federal student aid programs and has an intercollegiate athletic program reports these figures itself each year (USDE, n.d.). Our dataset contains `r nrow(athletics)` institutions. Two variables are categorical: the athletic classification (`r nlevels(factor(athletics$classification))` levels, e.g. NCAA Division I-FBS) and the sector (`r nlevels(factor(athletics$sector))` levels, e.g. public 4-year). The other 28 variables describe undergraduate enrolment, the number of athletes and teams, the participants per sport, the number and average salaries of head and assistant coaches, and the shares of full-time and female head coaches, mostly separately for men and women. The number of athletes counts each athlete once, while the participants per sport count an athlete once for every team (USDE, n.d.). The variable of interest is the total revenue of the athletic program, which includes for example ticket sales, media rights, donations and support from the institution. Since revenue has to cover the expenses of the program, a deficit paid by the institution also counts as revenue (USDE, 2025). Revenue is very right-skewed (Figure 1): it ranges from \$`r format(min(athletics$revenue), big.mark = ",")` to \$`r round(max(athletics$revenue) / 1e6, 1)` million, with a median of \$`r round(median(athletics$revenue) / 1e6, 1)` million and a mean of \$`r round(mean(athletics$revenue) / 1e6, 1)` million. We therefore use log revenue as dependent variable.
+The data come from the Equity in Athletics Disclosure Act (EADA) survey of the US Department of Education. Every co-educational college or university that participates in federal student aid programs and has at least one intercollegiate athletic program annually reports information about its programs (USDE, 2026). The dataset used for this report contains 1,000 institutions. Two variables are categorical: the athletic association and division of the institution (19 levels, e.g. NCAA Division I-FBS) and its sector (5 levels, e.g. private nonprofit, 4-year or above). The other 28 variables, which are used as predictors, describe undergraduate enrollment, the number of athletes and teams, the participants per sport, the number and average salaries of head and assistant coaches, and the shares of full-time and female head coaches, mostly separately for men and women. The number of athletes counts each athlete once, while the participants per sport count an athlete once for every team they are on (USDE, 2026). The unit ID identifies the institution and is not used as a predictor. The variable of interest is the total revenue of the athletic program, which includes, for example, ticket sales, media rights, donations and support from the institution itself. Since revenue has to cover the expenses of the program, a deficit paid by the institution also counts as revenue (USDE, 2025). Revenue is very right-skewed: it ranges from \$13,766 to \$289.6 million, with a median of \$4.1 million and a mean of \$14.3 million (Appendix, Figure 1). Therefore, the logarithm of revenue, which is much more symmetric, is used as the dependent variable.
 
-Missing values only occur in the coaching variables. Institutions without men's or women's teams report no coaches for those teams, so we set the number of coaches and their salaries to zero. For `r sum((!is.na(athletics$ac_men) & is.na(athletics$ac_salary_men)) | (!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women)))` institutions, assistant coaches are reported without a salary (`r sum(!is.na(athletics$ac_men) & is.na(athletics$ac_salary_men)) + sum(!is.na(athletics$ac_women) & is.na(athletics$ac_salary_women))` values in total). As volunteers are left out of the average salary (USDE, n.d.), these may be volunteers, but since we cannot verify this, we impute the median of the training data. The skewed counts and salaries are transformed with $\log(1 + x)$. A second dataset contains `r nrow(prediction)` institutions for which revenue has to be predicted.
+Missing values only occur in the coaching variables. Institutions without men's or women's teams report no coaches for those teams, so the number of coaches and their salaries are set to zero. For 10 institutions, assistant coaches are reported without a salary (16 missing salary values in total). As volunteer coaches are left out of the average salary (USDE, 2026), these may be programs with only volunteers. However, since this cannot be verified, the missing salaries are replaced by the median of the training data. The coach counts, the other counts and the salaries are also right-skewed, so they are transformed with $\log(1 + x)$, which keeps zeros defined and reduces the influence of very large programs.
 
-```{r fig-revenue, echo=FALSE, fig.cap="Distribution of revenue (left) and log revenue (right).", fig.height=2.6}
-grid.arrange(revenue, logrevenue, ncol = 2)
-```
+A second dataset contains 10 institutions for which the revenue is predicted. Their unit IDs are replaced by the numbers 1 to 10.
 
 # 3. Methods
 
@@ -379,13 +377,17 @@ grid.arrange(revenue, logrevenue, ncol = 2)
 
 # References
 
-US Department of Education (USDE). (n.d.). *Equity in Athletics Data Analysis*. Retrieved October 2026, from https://ope.ed.gov/athletics/#/
+US Department of Education (USDE). (2026). *Equity in Athletics Data Analysis*. Retrieved October 2026, from https://ope.ed.gov/athletics/#/
 
 US Department of Education (USDE). (2025). *EADA survey: Total revenues screen instructions*. https://surveys.ope.ed.gov/athletics2025/wwwroot/documents/inst_1.pdf
 
 \newpage
 
 # Appendix
+
+```{r fig-revenue, echo=FALSE, fig.cap="Distribution of revenue (left) and log revenue (right).", fig.height=2.6}
+grid.arrange(revenue, logrevenue, ncol = 2)
+```
 
 \newpage
 
