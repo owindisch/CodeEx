@@ -371,6 +371,34 @@ A second dataset contains 10 institutions for which the revenue is predicted. Th
 
 # 3. Methods
 
+To reduce the number of predictors, we first use Principal Component Analysis (PCA). When many predictors are strongly correlated, they largely measure the same underlying features. PCA replaces the original predictors by a small number of new, uncorrelated variables, the principal components, that together keep as much of the variation in the original predictors as possible. Each component is a weighted combination of the original variables, so that it can often be interpreted as a general feature of the observations. PCA only uses the predictors and does not consider the dependent variable.
+
+Let $\mathbf{X}$ be the $n \times p$ matrix of predictors, where $n$ is the number of observations and $p$ the number of predictors. Since the predictors are measured in different units, each predictor $j$ is standardised as $z_{ij} = (x_{ij} - \bar{x}_j)/s_j$, where $x_{ij}$ is the value of predictor $j$ for observation $i$, and $\bar{x}_j$ and $s_j$ are its mean and standard deviation. PCA then uses the eigendecomposition of the correlation matrix $\mathbf{R} = \mathbf{V}\boldsymbol{\Lambda}\mathbf{V}^\top$, where $\boldsymbol{\Lambda}$ is a diagonal matrix with the eigenvalues $\lambda_1 \geq \lambda_2 \geq \dots \geq \lambda_p$ and $\mathbf{V}$ contains the corresponding eigenvectors, the loadings. The scores of observation $i$ on component $k$ are
+$$
+f_{ik} = \sum_{j=1}^{p} v_{jk} z_{ij},
+$$
+where $v_{jk}$ is the loading of predictor $j$ on component $k$. The eigenvalue $\lambda_k$ is the variance of component $k$. Since the standardised predictors all have variance one, the proportion of variance accounted for by component $k$ is $\text{VAF}_k = \lambda_k / p$, and the first $K$ components together explain $\sum_{k=1}^{K} \lambda_k / p$.
+
+To choose the number of components $K$, we first look at a scree plot, where we look for an elbow after which the eigenvalues stay small. Kaiser's rule keeps the components with $\lambda_k > 1$, since such a component explains more variance than a single original predictor. We also report the number of components needed to explain at least 80% of the variance. As these rules do not account for sampling variation, we additionally use a permutation test. The values within each predictor are randomly shuffled $B$ times, which removes the correlations between the predictors but keeps their distributions. For each permuted dataset $b = 1, \dots, B$, the eigenvalues $\lambda_k^{(b)}$ are computed. Component $k$ is kept if its observed eigenvalue $\lambda_k$ is larger than the 97.5% quantile of $\lambda_k^{(1)}, \dots, \lambda_k^{(B)}$, so if it explains more variance than can be expected by chance. Finally, we bootstrap Kaiser's rule and the VAF. We draw $B$ samples of $n$ observations with replacement, compute the eigenvalues $\lambda_k^{*(b)}$ in each sample, and use the 2.5% and 97.5% quantiles as a 95% confidence interval. A component is significant under Kaiser's rule if the lower bound of its interval is above 1. In the same way, we compute a 95% interval for the VAF of the selected components, where a narrow interval indicates a stable solution. To interpret the components, we use the loadings, a biplot that shows the observations and the predictors in the space of two components, and the fit per variable $\sum_{k=1}^{K} r_{jk}^2$, where $r_{jk}$ is the correlation between predictor $j$ and the scores on component $k$. A fit close to one means that predictor $j$ is well represented by the selected components.
+
+In the principal component regression (PCR), the dependent variable is regressed on the scores of the first $K$ components, together with dummy variables for the categorical predictors:
+$$
+y_i = \beta_0 + \sum_{k=1}^{K} \gamma_k f_{ik} + \sum_{l=1}^{L} \delta_l d_{il} + \varepsilon_i,
+$$
+where $y_i$ is the dependent variable of observation $i$, $\beta_0$ the intercept, $\gamma_k$ the coefficient of component $k$, $d_{il}$ the $l$-th of $L$ dummy variables with coefficient $\delta_l$, and $\varepsilon_i$ the error term. The coefficients are estimated with Ordinary Least Squares (OLS). We use the $t$-value $t = \hat{\gamma}_k / \text{SE}(\hat{\gamma}_k)$, where $\hat{\gamma}_k$ is the estimate and $\text{SE}(\hat{\gamma}_k)$ its standard error, to test whether a component is related to the dependent variable. Absolute $t$-values above 1.96 indicate a significant relation at the 5% level. The $R^2$ gives the proportion of variance in the dependent variable that is explained by the model, so higher values are preferred.
+
+As a second model, we use ridge regression, which keeps all predictors but shrinks their coefficients towards zero. This makes the estimates more stable when predictors are strongly correlated, at the cost of a small bias. The ridge coefficients minimise
+$$
+\sum_{i=1}^{n} \Big( y_i - \beta_0 - \sum_{j=1}^{q} x_{ij}\beta_j \Big)^2 + \lambda \sum_{j=1}^{q} \beta_j^2,
+$$
+where $q$ is the number of predictors including the dummy variables, $\beta_j$ the coefficient of predictor $j$, and $\lambda \geq 0$ the penalty parameter. For $\lambda = 0$, ridge regression equals OLS, and a larger $\lambda$ shrinks the coefficients more, but never exactly to zero. As the penalty depends on the scale of the predictors, the numerical predictors are standardised first. The value of $\lambda$ is chosen with 10-fold cross-validation: the training data are split into 10 parts, the model is estimated on nine parts and evaluated on the remaining part, and this is repeated so that every part is left out once. We consider $\lambda_{\min}$, which gives the lowest cross-validated error, and $\lambda_{1SE}$, the largest $\lambda$ whose error is within one standard error of this minimum. The latter gives a simpler model with more shrinkage. The coefficient paths show how the coefficients change with $\lambda$.
+
+To compare the models, the data are randomly split into a training set (80%) and a test set (20%). All models are estimated on the training set and evaluated on the test set with the root mean squared error,
+$$
+\text{RMSE} = \sqrt{\frac{1}{m}\sum_{i=1}^{m} (y_i - \hat{y}_i)^2},
+$$
+where $m$ is the number of test observations and $\hat{y}_i$ the prediction for observation $i$, and with the test $R^2 = 1 - \sum_{i}(y_i - \hat{y}_i)^2 / \sum_{i}(y_i - \bar{y})^2$, where $\bar{y}$ is the mean of the test observations. A lower RMSE and a higher $R^2$ indicate better predictions. When the dependent variable is the logarithm of a variable, an error on the log scale can be read as a relative error. To obtain predictions on the original scale, the predictions have to be transformed back. Simply taking $\exp(\hat{y}_i)$ estimates the median and underestimates the mean, because $E[\exp(y)] > \exp(E[y])$. We therefore also use the smearing estimator of Duan (1983), $\exp(\hat{y}_i) \cdot \frac{1}{n}\sum_{i=1}^{n} \exp(e_i)$, where $e_i$ are the residuals of the training data. On the original scale, the RMSE is mostly determined by the observations with the largest values.
+
 # 4. Results
 
 # 5. Conclusions and Discussion
@@ -378,6 +406,8 @@ A second dataset contains 10 institutions for which the revenue is predicted. Th
 # References
 
 US Department of Education (USDE). (2026). *Equity in Athletics Data Analysis*. Retrieved October 2026, from https://ope.ed.gov/athletics/#/
+
+Duan, N. (1983). Smearing estimate: A nonparametric retransformation method. *Journal of the American Statistical Association, 78*(383), 605–610.
 
 US Department of Education (USDE). (2025). *EADA survey: Total revenues screen instructions*. https://surveys.ope.ed.gov/athletics2025/wwwroot/documents/inst_1.pdf
 
