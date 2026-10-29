@@ -10,6 +10,8 @@ library(boot)
 library(gridExtra)
 library(caret)
 
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d) # rounds numbers for the text and tables, e.g. f2(13.8) gives "13.80"
+
 permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scale.data = TRUE, ...){ # permutation test function from lecture 5
   n <- nrow(X)
   m <- ncol(X)
@@ -321,7 +323,6 @@ share_fbs <- err_by_class$share_of_squared_err[err_by_class$classification == "N
 n_fbs     <- err_by_class$n[err_by_class$classification == "NCAA Division I-FBS"]
 share_d1  <- sum(err_by_class$share_of_squared_err[grepl("NCAA Division I", err_by_class$classification) &
                                                    !grepl("Division II", err_by_class$classification)])
-f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
 
 grid.arrange(revenue, logrevenue, ncol = 2)
 

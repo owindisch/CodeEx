@@ -10,6 +10,7 @@ header-includes:
 output:
   pdf_document:
     latex_engine: xelatex
+    fig_crop: false
 subtitle: FEM11149 - Introduction to Data Science
 editor_options:
   chunk_output_type: inline
@@ -17,7 +18,7 @@ urlcolor: blue
 linkcolor: red
 ---
 
-```{r data setup, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(fig.pos = "H", fig.align = "center", fig.width = 6.5, fig.height = 4)
 
 library(tidyverse)
@@ -25,6 +26,8 @@ library(glmnet)
 library(boot)
 library(gridExtra)
 library(caret)
+
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d) # rounds numbers for the text and tables, e.g. f2(13.8) gives "13.80"
 
 permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scale.data = TRUE, ...){ # permutation test function from lecture 5
   n <- nrow(X)
@@ -59,7 +62,7 @@ athletics  <- read.csv("data_783996yw.csv")  # 1000 institutions with revenue
 prediction <- read.csv("predictions-2.csv")  # 10 institutions, revenue has to be predicted
 ```
 
-```{r data cleanup, include=FALSE}
+```{r cleanup, include=FALSE}
 # 1. Inspect data
 
 dim(athletics) # check size, variables and distribution of revenue, the variable of interest
@@ -405,7 +408,6 @@ share_fbs <- err_by_class$share_of_squared_err[err_by_class$classification == "N
 n_fbs     <- err_by_class$n[err_by_class$classification == "NCAA Division I-FBS"]
 share_d1  <- sum(err_by_class$share_of_squared_err[grepl("NCAA Division I", err_by_class$classification) &
                                                    !grepl("Division II", err_by_class$classification)])
-f2 <- function(x, d = 2) formatC(x, format = "f", digits = d)
 ```
 
 The first principal component has an eigenvalue of `r f2(eigenvalues[1])` and explains `r f2(100 * vaf[1], 1)`% of the variance of the 28 predictors (Appendix, Table 1). The selection methods do not all agree with each other. The 80% VAF rule suggests `r k_vaf80` components, Kaiser's rule `r k_kaiser`, the bootstrapped Kaiser's rule `r k_kaiser_boot`, the scree plot two, and the permutation test `r k_perm`. Since the permutation test is the only method that compares the eigenvalues to those of random data, `r n_pc` components are selected. Components 4 to 6 have eigenvalues above 1, but not above what can be expected by chance. Together, the `r n_pc` components explain `r f2(100 * cum_vaf[n_pc], 1)`% of the variance, and the narrow bootstrap interval of [`r f2(100 * perc.alpha[1], 1)`%, `r f2(100 * perc.alpha[2], 1)`%] shows that this result is stable.
