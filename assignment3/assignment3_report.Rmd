@@ -324,6 +324,11 @@ err_by_class <- data.frame(classification = test_data$classification, # where do
   arrange(desc(RMSE_rev_M))
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
+dec <- cut(rank(y_test), 10, labels = 1:10) # revenue deciles of the test set (1 = lowest revenue)
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per decile
+bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per decile, < 0 = underpredicted
+round(rmse_dec, 2); round(bias_dec, 2)
+
 op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue, red line = perfect prediction
 plot(pred_log[["PCR"]], y_test, pch = 20, col = "grey40", las = 1, main = "PCR",
      xlab = "Predicted log revenue", ylab = "Observed log revenue")
@@ -373,7 +378,7 @@ Let $\mathbf{X}$ be the $n \times p$ matrix of predictors $X_1, \dots, X_p$, wit
 $$
 \max_{\boldsymbol{\gamma}_1:\, \|\boldsymbol{\gamma}_1\| = 1} \text{Var}(\boldsymbol{\gamma}_1^\top \mathbf{X}) = \max_{\boldsymbol{\gamma}_1:\, \|\boldsymbol{\gamma}_1\| = 1} \boldsymbol{\gamma}_1^\top \boldsymbol{\Sigma} \boldsymbol{\gamma}_1,
 $$
-where $\boldsymbol{\Sigma} = \text{Var}(\mathbf{X})$ is the covariance matrix of the predictors. The restriction $\|\boldsymbol{\gamma}_1\| = 1$ prevents an infinitely large variance. The solution is the first eigenvector of $\boldsymbol{\Sigma}$ and $\text{Var}(Z_1)$ is the first eigenvalue $\lambda_1$. Each next component again has maximum variance, but is uncorrelated with the previous components. This procedure gives eigenvalues $\lambda_1 \geq \lambda_2 \geq \dots \geq \lambda_p$, where $\lambda_s = \text{Var}(Z_s)$ measures the importance of component $s$. Since predictors are often measured in different units and PCA is sensitive to scale, PCA is done on the correlation matrix. This standardizes the values. The eigenvalues then add up to the number of variables, $\sum_{s=1}^{p} \lambda_s = p$, and the proportion of variance accounted for by component $s$ is $\text{VAF}_s = \lambda_s / p$.
+where $\boldsymbol{\Sigma} = \text{Var}(\mathbf{X})$ is the covariance matrix of the predictors. The restriction $\|\boldsymbol{\gamma}_1\| = 1$ prevents an infinitely large variance. The solution is the first eigenvector of $\boldsymbol{\Sigma}$ and $\text{Var}(Z_1)$ is the first eigenvalue $\lambda_1$. Each next component again has maximum variance, but is uncorrelated with the previous components. As a result, higher components only describe the variance that is still left, which makes them harder to interpret. This procedure gives eigenvalues $\lambda_1 \geq \lambda_2 \geq \dots \geq \lambda_p$, where $\lambda_s = \text{Var}(Z_s)$ measures the importance of component $s$. Since predictors are often measured in different units and PCA is sensitive to scale, PCA is done on the correlation matrix. This standardizes the values. The eigenvalues then add up to the number of variables, $\sum_{s=1}^{p} \lambda_s = p$, and the proportion of variance accounted for by component $s$ is $\text{VAF}_s = \lambda_s / p$.
 
 Four different methods are then used to select a meaningful number of dimensions. To begin with, *cumulative VAF* is used to decide an initial number of components. It should be at least 80%, but this can often lead to many components. Secondly, *Kaiser's rule* is applied. This method keeps all components with $\lambda_s > 1$. If a component equal to one standardized variable $X_j$ was chosen, its eigenvalue would be exactly 1. A component with $\lambda_s > 1$ explains more than one original variable. Third, a *scree plot* is utilized. The eigenvalue $\lambda_s$ is plotted against the dimension number $s$. Components up to the visible "elbow" in the plot are kept (not including the elbow itself). Lastly, a *permutation test* compares each observed eigenvalue $\lambda_s$ to the eigenvalues of $N_{\text{perm}} = 1000$ datasets in which the values within each column are randomly permuted. This removes the correlations between the predictors. For each permuted dataset, the PCA eigenvalues are stored and the $\alpha/2$ and $1 - \alpha/2$ percentiles are computed (with $\alpha = 0.05$). If $\lambda_s$ lies above this interval, dimension $s$ is significantly different from random data and is kept.
 
@@ -399,19 +404,19 @@ $$
 $$
 where $\hat{y}_i$ is the out-of-sample prediction for observation $i$. A lower value is seen as better. Two values are considered: $\lambda_{\min}$, the value with the lowest $\text{RMSE}_{\text{CV}}$, and $\lambda_{1SE}$, the largest $\lambda$ whose error is within one standard error of this minimum. The 1-SE rule gives a simpler model with more shrinkage.
 
-Both models are estimated on the training set and compared on the test set with $\text{RMSE} = \sqrt{\frac{1}{m}\sum_{i=1}^{m} (y_i - \hat{y}_i)^2}$ and $R^2 = 1 - \sum_{i}(y_i - \hat{y}_i)^2 / \sum_{i}(y_i - \bar{y})^2$, where $m$ is the number of test observations and $\bar{y}$ their mean. A lower RMSE and a higher $R^2$ mean better predictions. When the dependent variable is a logarithm, an error on the log scale can be read as a relative error (in %). To get predictions on the original scale, the predictions are transformed back with $\exp(\hat{y}_i)$. On the original scale, the RMSE is mostly determined by the largest observations.
+Both models are estimated on the training set and compared on the test set with $\text{RMSE} = \sqrt{\frac{1}{m}\sum_{i=1}^{m} (y_i - \hat{y}_i)^2}$ and $R^2 = 1 - \sum_{i}(y_i - \hat{y}_i)^2 / \sum_{i}(y_i - \bar{y})^2$, where $m$ is the number of test observations and $\bar{y}$ their mean. A lower RMSE and a higher $R^2$ mean better predictions. When the dependent variable is a logarithm, an error on the log scale can be read as a relative error (in %). The RMSE on the log scale is the main evaluation metric, as athletic directors want to compare programs of very different sizes: a relative error of 20% then counts the same for a program with 1 million USD as for one with 100 million USD revenue. Squaring the errors penalizes large mistakes more than small ones, which is relevant because a strongly wrong revenue estimate can lead to a seriously wrong budget. To check whether the errors depend on the size of a program, the test RMSE is also computed per revenue decile. To get predictions on the original scale, the predictions are transformed back with $\exp(\hat{y}_i)$. The RMSE in USD is also reported, since budgets are planned in dollars, but on the original scale it is mostly determined by the largest observations.
 
 # 4. Results
 
 The first principal component has an eigenvalue of 13.80 and explains 49.3% of the variance of the 28 predictors (Appendix, Table 1). The four selection methods do not all agree with each other. While the 80% VAF method suggests eight components, Kaiser's rule picks six, the scree plot two, and the permutation test three. The bootstrapped Kaiser's rule chooses five components. Since the permutation test is the only method that compares the eigenvalues to those of random data, the final selected components are the three from the permutation test. Together, the components explain 64.4% of the variance. The narrow bootstrap interval [63.1%, 66.5%] shows that this result is stable.
 
-The loadings (Appendix, Table 2) and the biplot (Appendix, Figure 2) show what the components mean. The first component correlates positively with all variables. The correlation is strongest with the number of athletes, teams and coaches. It can be said that it measures *program size*. The second component is high for programs at large institutions with high coach salaries and many full-time coaches, and low for programs with many teams and coaches but low(er) salaries. This component can be named *Quality vs Quantity*. The third component separates individual sports, such as track and field, from the team sports basketball, baseball and softball. *Individual vs Team Sports* describes this component well. It is relevant to note that football (a team sport) participation has almost no correlation (-0.04) with this component. The effect of football, the main revenue-driver at FBS institutions, is mostly captured in the first component. The PCR also picks up on its effect through the division dummy variables.
+The loadings (Appendix, Table 2) and the biplot (Appendix, Figure 2) show what the components mean. The first component correlates positively with all variables. The correlation is strongest with the number of athletes, teams and coaches. It can be said that it measures *program size*. The second component is high for programs at large institutions with high coach salaries and many full-time coaches, and low for programs with many teams and coaches but low(er) salaries. This component can be named *Quality vs Quantity*. The third component separates individual sports, such as track and field, from the team sports basketball, baseball and softball. *Individual vs Team Sports* describes this component well. It is less clear than the first two components, because it is forced to be orthogonal to them: after program size and *Quality vs Quantity* have been accounted for, the third component can only describe the variation that is left, which does not necessarily form a meaningful direction. This is in line with its small VAF (5.4%). It is relevant to note that football (a team sport) participation has almost no correlation (-0.04) with this component. The effect of football, the main revenue-driver at FBS institutions, is mostly captured in the first component. The PCR also picks up on its effect through the division dummy variables.
 
 In the PCR, the components and dummies explain 94.5% of the variance of log revenue in the training data. *Program size* and *Quality vs Quantity* are statistically significant at the 0.1% level ($p < 0.001$). *Individual vs Team Sports* is not statistically significant ($p = 0.64$). The division of a program is very important for predicting revenue: On average, an NCAA Division I-FBS program earns about 11 times as much as a CCCAA program, ceteris paribus.
 
 For ridge regression, cross-validation chose a very small penalty ($\lambda_{\min}$ = 5.0e-04), so the results of it are very similar to OLS. The largest ridge coefficients are the division dummy variables, followed by the salary of head coaches of men's teams.
 
-On the test set, both models predict log revenue well (Appendix, Table 3). The PCR has the lowest RMSE on the log scale (0.425, $R^2$ = 0.916), so three components and the divisions contain almost the same information as all 28 characteristics. On the original scale, ridge regression with $\lambda_{\min}$ has the lowest RMSE (8.78 million USD). These errors mainly come from the largest programs. The seven FBS programs in the test set cause 71% of the squared error. The predicted revenues of the ten new institutions (Appendix, Table 4) range from 1.7 million USD for the NAIA Division I program to 115.2 (PCR) and 142.2 million USD (ridge) for the FBS program.
+On the test set, both models predict log revenue well (Appendix, Table 3). The PCR has the lowest RMSE on the log scale (0.425, $R^2$ = 0.916), so three components and the divisions contain almost the same information as all 28 characteristics. On the original scale, ridge regression with $\lambda_{\min}$ has the lowest RMSE (8.78 million USD). These errors mainly come from the largest programs. The seven FBS programs in the test set cause 71% of the squared error. Per revenue decile (Appendix, Table 4), the errors on the log scale are largest for the 20% smallest and the 10% largest programs (RMSE of about 0.5 to 0.7, compared with about 0.2 to 0.4 in the middle deciles), and the largest programs are systematically underpredicted by about 16%. The predicted revenues of the ten new institutions (Appendix, Table 5) range from 1.7 million USD for the NAIA Division I program to 115.2 (PCR) and 142.2 million USD (ridge) for the FBS program.
 
 # 5. Conclusions and Discussion
 
@@ -419,7 +424,7 @@ This report investigated *to what extent the revenue of an intercollegiate athle
 
 When it comes to *the characteristics most closely related to revenue*, the results showed that revenue is mostly related to the size of a program. It is also somewhat relevant how well its coaches are paid. Furthermore, the division matters a lot. FBS programs earn much more than similar programs in lower divisions.
 
-This research has several limitations. Most importantly, the results only show correlation, not causation. The data are also reported by the institutions themselves and only describe a certain point in time. In addition, some missing salaries were filled with the median for this analysis, but they may have actually been volunteer coaches with a salary of zero. Moreover, components were formed without looking at revenue, so football, which is a crucial sport for the largest programs, is not captured well by them. Finally, the models were compared on only one train/test data split. Differences between them may change with another split. Future research could for example use data over a span of several years and repeat the split several times to check whether the differences between the models are robust.
+This research has several limitations. Most importantly, the results only show correlation, not causation. The data are also reported by the institutions themselves and only describe a certain point in time. In addition, some missing salaries were filled with the median for this analysis, but they may have actually been volunteer coaches with a salary of zero. Moreover, components were formed without looking at revenue, so football, which is a crucial sport for the largest programs, is not captured well by them. Finally, the models were compared on only one train/test data split. Differences between them may change with another split. The smallest and largest programs are also predicted worst. This could be improved by allowing the effects to differ by division, for example with interaction terms or separate models for NCAA Division I and the other divisions, as the revenue of the largest programs is driven by football, media rights and conference distributions. Adding variables that directly measure these income sources, such as attendance, conference membership or media contracts, and collecting more observations of very small and very large programs would also help. Future research could for example use data over a span of several years and repeat the split several times to check whether the differences between the models are robust.
 
 # References
 
@@ -463,8 +468,8 @@ cat("\\endgroup\n")
 
 \newpage
 
-```{r fig-biplot, echo=FALSE, fig.cap="Biplot of components 1 and 2. Points are institutions, arrows are variables.", fig.width=5.5, fig.height=4.3}
-par(mar = c(4, 4, 4, 4))
+```{r fig-biplot, echo=FALSE, fig.cap="Biplot of components 1 and 2. Points are institutions, arrows are variables.", fig.width=4.2, fig.height=2.9}
+par(mar = c(4, 4, 3, 3))
 biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("grey70", "red"),
        asp = 1, cex = c(0.4, 0.6), xlabs = rep("o", nrow(X_pca)))
 ```
@@ -477,11 +482,20 @@ knitr::kable(tab_eval, format = "latex", position = "H", digits = 3, booktabs = 
              caption = "Predictive performance on the test set.")
 ```
 
-```{r tab-pred, echo=FALSE}
+```{r tab-dec, echo=FALSE}
+tab_dec <- t(rmse_dec[, 1:2])
+rownames(tab_dec) <- c("PCR", "Ridge ($\\lambda_{\\min}$)")
+knitr::kable(tab_dec, format = "latex", position = "H", digits = 2, booktabs = TRUE, escape = FALSE,
+             caption = "Test RMSE on the log scale per revenue decile (1 = lowest, 10 = highest revenue).")
+```
+
+```{r tab-pred, echo=FALSE, results='asis'}
 tab_pred <- pred_out
 names(tab_pred) <- c("ID", "Classification", "PCR", "Ridge")
-knitr::kable(tab_pred, format = "latex", position = "H", digits = 1, booktabs = TRUE, row.names = FALSE, linesep = "",
-             caption = "Predicted revenue (in million USD) of the 10 institutions.")
+cat("\\begingroup\\footnotesize\n")
+print(knitr::kable(tab_pred, format = "latex", position = "H", digits = 1, booktabs = TRUE, row.names = FALSE, linesep = "",
+                   caption = "Predicted revenue (in million USD) of the 10 institutions."))
+cat("\\endgroup\n")
 ```
 
 \newpage
@@ -608,6 +622,9 @@ err_by_class <- data.frame(classification = test_data$classification,   # where 
   group_by(classification) %>% summarise(n = n(), share_of_squared_err = sum(sq_err_rev)) %>%
   mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% arrange(desc(share_of_squared_err))
 err_by_class                                                    # fbs schools cause most of the usd error
+dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile
+round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc],
                          classification = prediction_new$classification, sector = prediction_new$sector)

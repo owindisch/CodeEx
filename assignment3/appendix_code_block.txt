@@ -118,6 +118,9 @@ err_by_class <- data.frame(classification = test_data$classification,   # where 
   group_by(classification) %>% summarise(n = n(), share_of_squared_err = sum(sq_err_rev)) %>%
   mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% arrange(desc(share_of_squared_err))
 err_by_class                                                    # fbs schools cause most of the usd error
+dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile
+round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc],
                          classification = prediction_new$classification, sector = prediction_new$sector)
