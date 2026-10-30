@@ -488,7 +488,7 @@ knitr::kable(tab_eval, format = "latex", position = "H", digits = 3, booktabs = 
 tab_dec <- t(rmse_dec[, 1:2])
 rownames(tab_dec) <- c("PCR", "Ridge ($\\lambda_{\\min}$)")
 knitr::kable(tab_dec, format = "latex", position = "H", digits = 2, booktabs = TRUE, escape = FALSE,
-             caption = "Test RMSE on the log scale per revenue decile (1 = lowest, 10 = highest revenue).")
+             caption = "\\textcolor{red}{Test RMSE on the log scale per revenue decile (1 = lowest, 10 = highest revenue).}")
 ```
 
 ```{r tab-pred, echo=FALSE, results='asis'}
@@ -509,7 +509,7 @@ cat("\\endgroup\n")
 \setlength{\parskip}{0pt}
 
 \begin{lstlisting}[basicstyle=\ttfamily\fontsize{6}{6.4}\selectfont, columns=fullflexible, breaklines=true,
-keepspaces=true, showstringspaces=false, aboveskip=0pt, belowskip=0pt, xleftmargin=0pt, frame=none]
+keepspaces=true, showstringspaces=false, aboveskip=0pt, belowskip=0pt, xleftmargin=0pt, frame=none, moredelim={[is][\color{red}]{@@}{@@}}]
 library(tidyverse); library(glmnet); library(boot); library(gridExtra); library(caret)
 
 permtestPCA <- function(X, nTests = 100, alpha = 0.05, ...){ # permutation test function from lecture 5
@@ -624,9 +624,9 @@ err_by_class <- data.frame(classification = test_data$classification,   # where 
   group_by(classification) %>% summarise(n = n(), share_of_squared_err = sum(sq_err_rev)) %>%
   mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% arrange(desc(share_of_squared_err))
 err_by_class                                                    # fbs schools cause most of the usd error
-dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)
-rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile
-round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted
+@@dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)@@
+@@rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile@@
+@@round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted@@
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc],
                          classification = prediction_new$classification, sector = prediction_new$sector)
