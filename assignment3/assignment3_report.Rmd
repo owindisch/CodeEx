@@ -383,7 +383,11 @@ In the principal component regression (PCR), the dependent variable is regressed
 $$
 y_i = \beta_0 + \sum_{s=1}^{r} \theta_s z_{is} + \sum_{l=1}^{L} \delta_l d_{il} + \varepsilon_i,
 $$
-where $y_i$ is the dependent variable for observation $i$, $\beta_0$ the intercept, $z_{is}$ the score on component $s$ with coefficient $\theta_s$, $d_{il}$ the $l$-th of $L$ dummies with coefficient $\delta_l$, and $\varepsilon_i$ the error term. To test whether a component is related to the dependent variable ($H_0: \theta_s = 0$), the $t$-value $t = \hat{\theta}_s / \text{SE}(\hat{\theta}_s)$ is used, which is the estimate divided by its standard error. The $p$-value is the probability of finding a $t$-value at least this large in absolute value if $H_0$ is true. If $p < 0.05$, which in large samples corresponds to $|t| > 1.96$, the component is significant at the 5% level. A higher $R^2$ is preferred, as more variance of the dependent variable is then explained by the model.
+where $y_i$ is the dependent variable for observation $i$, $\beta_0$ the intercept, $z_{is}$ the score on component $s$ with coefficient $\theta_s$, $d_{il}$ the $l$-th of $L$ dummies with coefficient $\delta_l$, and $\varepsilon_i$ the error term. For each component, the following hypotheses are tested:
+$$
+H_0: \theta_s = 0 \quad \text{versus} \quad H_1: \theta_s \neq 0.
+$$
+The null hypothesis $H_0$ states that component $s$ has no relation with the dependent variable, given the other components and the dummies, while the alternative hypothesis $H_1$ states that it does. The test uses the $t$-value $t = \hat{\theta}_s / \text{SE}(\hat{\theta}_s)$, which is the estimate divided by its standard error. The $p$-value is the probability of finding a $t$-value at least this large in absolute value if $H_0$ is true. If $p < 0.05$, which in large samples corresponds to $|t| > 1.96$, $H_0$ is rejected and the component is significant at the 5% level. A higher $R^2$ is preferred, as more variance of the dependent variable is then explained by the model.
 
 The second technique is ridge regression, an adaptation of multiple regression that penalises the size of the coefficients. It is very useful with many or strongly correlated predictors, because the estimates become more stable. With the dependent variable in deviation from its mean, ridge regression minimises
 $$
