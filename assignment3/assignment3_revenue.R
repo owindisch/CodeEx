@@ -2,6 +2,7 @@
 ## Same code as assignment3_report.Rmd (generated with knitr::purl), for running without knitting.
 ## Run inside the assignment3 folder:  Rscript assignment3_revenue.R
 
+## ----setup, include=FALSE-----------------------------------------------------
 knitr::opts_chunk$set(fig.pos = "H", fig.align = "center", fig.width = 6.5, fig.height = 4)
 
 library(tidyverse)
@@ -44,6 +45,8 @@ permtestPCA <- function (X, nTests = 100, alpha = 0.05, center.data = TRUE, scal
 athletics  <- read.csv("data_783996yw.csv")  # 1000 institutions with revenue
 prediction <- read.csv("predictions-2.csv")  # 10 institutions, revenue has to be predicted
 
+
+## ----cleanup, include=FALSE---------------------------------------------------
 # 1. Inspect data
 
 dim(athletics) # check size, variables and distribution of revenue, the variable of interest
@@ -122,6 +125,8 @@ stopifnot(!anyNA(prediction_new$classification), !anyNA(prediction_new$sector)) 
 athletics_new  <- logged_vars(athletics_new) # log the skewed predictors in both datasets
 prediction_new <- logged_vars(prediction_new)
 
+
+## ----split, include=FALSE-----------------------------------------------------
 # 3. Split the data
 
 set.seed(123)
@@ -143,6 +148,8 @@ stopifnot(!anyNA(train_data[num_vars]), !anyNA(test_data[num_vars]), !anyNA(pred
 cor_tab <- sort(sapply(train_data[num_vars], cor, y = train_data$log_revenue), decreasing = TRUE) # correlation with log revenue
 round(cor_tab, 2) # salaries and coaches correlate strongly with log revenue (in eada revenue must cover expenses)
 
+
+## ----pca, include=FALSE-------------------------------------------------------
 # 4. PCA on the 28 numerical predictors (training data)
 # dummies are left out for now, they return in the pcr (pca on 0/1 variables is hard to interpret)
 
@@ -215,6 +222,8 @@ biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 2:3, col = c("blue", "red"
        asp = 1, cex = c(0.4, 0.7), xlabs = rep("o", nrow(X_pca)), main = "Biplot components 2 and 3")
 par(op)
 
+
+## ----pcr, include=FALSE-------------------------------------------------------
 # 5. Principal component regression: log revenue on the n_pc pc scores + classification and sector dummies
 # the pcs summarise the 28 numerical predictors, the dummies add the categorical information
 
@@ -228,6 +237,8 @@ test_scores  <- data.frame(predict(fitpca, newdata = X_pca_test)[, 1:n_pc, drop 
 fit_pcr <- lm(log_revenue ~ ., data = train_scores) # ols on pcs and dummies (lm makes the dummies itself)
 summary(fit_pcr)
 
+
+## ----ridge, include=FALSE-----------------------------------------------------
 # 6. Ridge regression on the 28 numerical predictors + dummies
 
 form_x <- as.formula(paste("~", paste(c(num_vars, "classification", "sector"), collapse = " + ")))
@@ -264,6 +275,8 @@ Weights <- cbind(result.ridge.min$beta, result.ridge.1se$beta) # coefficients on
 colnames(Weights) <- c("lambda.min", "lambda.1se")
 round(Weights, digits = 3)
 
+
+## ----evaluation, include=FALSE------------------------------------------------
 # 7. Evaluation on log scale and on revenue scale
 
 rmse   <- function(y, yhat) sqrt(mean((y - yhat)^2))
@@ -309,6 +322,8 @@ plot(pred_log[["Ridge lambda.min"]], y_test, pch = 20, col = "grey40", las = 1, 
 abline(0, 1, col = "red")
 par(op)
 
+
+## ----predictions, include=FALSE-----------------------------------------------
 # 8. Predictions for the 10 institutions, with the same models that were evaluated on the test set
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc, drop = FALSE], # projected on the training pca
@@ -322,8 +337,12 @@ pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$c
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
 
+
+## ----fig-revenue, echo=FALSE, fig.cap="Distribution of revenue in million USD (left) and log revenue (right). Revenue is strongly right-skewed, log revenue is roughly symmetric.", fig.width=7, fig.height=2----
 grid.arrange(revenue, logrevenue, ncol = 2)
 
+
+## ----tab-pca, echo=FALSE, results='asis'--------------------------------------
 tab_pca <- data.frame(Component = 1:6,
                       Eigenvalue = eigenvalues[1:6],
                       VAF = 100 * vaf[1:6],
@@ -336,6 +355,8 @@ print(knitr::kable(tab_pca, format = "latex", position = "H", digits = 2, bookta
              caption = "Eigenvalues, VAF (in \\%), upper bound of the permutation test and bootstrap confidence intervals of the eigenvalues for the first six components."))
 cat("\\endgroup\n")
 
+
+## ----tab-loadings, echo=FALSE, results='asis'---------------------------------
 tab_load <- data.frame(Variable = gsub("_", " ", rownames(fit_var)), round(fit_var, 2), row.names = NULL)
 half <- ceiling(nrow(tab_load) / 2) # two blocks next to each other, so the table fits on the page
 tab_load2 <- cbind(tab_load[1:half, ], tab_load[(half + 1):nrow(tab_load), ])
@@ -345,24 +366,33 @@ print(knitr::kable(tab_load2, format = "latex", position = "H", digits = 2, book
                    caption = "Component loadings (correlations between variables and components C1 to C3) and fit per variable."))
 cat("\\endgroup\n")
 
+
+## ----fig-biplot, echo=FALSE, fig.cap="Biplot of components 1 and 2. Points are institutions, arrows are variables.", fig.width=4.2, fig.height=2.9----
 par(mar = c(4, 4, 3, 3))
 biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("grey70", "red"),
        asp = 1, cex = c(0.4, 0.6), xlabs = rep("o", nrow(X_pca)))
 
+
+## ----tab-eval, echo=FALSE-----------------------------------------------------
 tab_eval <- eval_tab
 tab_eval$Model <- c("PCR", "Ridge ($\\lambda_{\\min}$)", "Ridge ($\\lambda_{1SE}$)")
 names(tab_eval) <- c("Model", "RMSE (log)", "$R^2$ (log)", "RMSE (million USD)")
 knitr::kable(tab_eval, format = "latex", position = "H", digits = 3, booktabs = TRUE, row.names = FALSE, escape = FALSE,
              caption = "Predictive performance on the test set.")
 
+
+## ----tab-dec, echo=FALSE------------------------------------------------------
 tab_dec <- t(rmse_dec[, 1:2])
 rownames(tab_dec) <- c("PCR", "Ridge ($\\lambda_{\\min}$)")
 knitr::kable(tab_dec, format = "latex", position = "H", digits = 2, booktabs = TRUE, escape = FALSE,
              caption = "Test RMSE on the log scale per revenue group, each containing 10\\% of the test institutions (1 = lowest, 10 = highest revenue).")
 
+
+## ----tab-pred, echo=FALSE, results='asis'-------------------------------------
 tab_pred <- pred_out
 names(tab_pred) <- c("ID", "Classification", "PCR", "Ridge")
 cat("\\begingroup\\footnotesize\n")
 print(knitr::kable(tab_pred, format = "latex", position = "H", digits = 1, booktabs = TRUE, row.names = FALSE, linesep = "",
                    caption = "Predicted revenue (in million USD) of the 10 institutions."))
 cat("\\endgroup\n")
+
