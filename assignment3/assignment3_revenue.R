@@ -317,13 +317,6 @@ pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$c
 print(pred_out, digits = 3, row.names = FALSE)
 write.csv(pred_out, "predictions_output.csv", row.names = FALSE)
 
-fbs      <- "classificationNCAA Division I-FBS"
-pcr_sum  <- summary(fit_pcr)
-share_fbs <- err_by_class$share_of_squared_err[err_by_class$classification == "NCAA Division I-FBS"]
-n_fbs     <- err_by_class$n[err_by_class$classification == "NCAA Division I-FBS"]
-share_d1  <- sum(err_by_class$share_of_squared_err[grepl("NCAA Division I", err_by_class$classification) &
-                                                   !grepl("Division II", err_by_class$classification)])
-
 grid.arrange(revenue, logrevenue, ncol = 2)
 
 tab_pca <- data.frame(Component = 1:6,
