@@ -295,7 +295,7 @@ err_by_class <- data.frame(classification = test_data$classification, # where do
   arrange(desc(RMSE_rev_M))
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
-dec <- cut(rank(y_test), 10, labels = 1:10) # revenue deciles of the test set (1 = lowest revenue)
+dec <- cut(rank(y_test), 10, labels = 1:10) # 10 equally sized revenue groups of the test set (1 = lowest revenue)
 rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per revenue group
 bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per revenue group, < 0 = underpredicted
 round(rmse_dec, 2); round(bias_dec, 2)
