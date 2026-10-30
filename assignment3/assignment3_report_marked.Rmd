@@ -327,8 +327,8 @@ err_by_class <- data.frame(classification = test_data$classification, # where do
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
 dec <- cut(rank(y_test), 10, labels = 1:10) # revenue deciles of the test set (1 = lowest revenue)
-rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per decile
-bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per decile, < 0 = underpredicted
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per revenue group
+bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per revenue group, < 0 = underpredicted
 round(rmse_dec, 2); round(bias_dec, 2)
 
 op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue, red line = perfect prediction
@@ -406,7 +406,7 @@ $$
 $$
 where $\hat{y}_i$ is the out-of-sample prediction for observation $i$. A lower value is seen as better. Two values are considered: $\lambda_{\min}$, the value with the lowest $\text{RMSE}_{\text{CV}}$, and $\lambda_{1SE}$, the largest $\lambda$ whose error is within one standard error of this minimum. The 1-SE rule gives a simpler model with more shrinkage.
 
-Both models are estimated on the training set and compared on the test set with $\text{RMSE} = \sqrt{\frac{1}{m}\sum_{i=1}^{m} (y_i - \hat{y}_i)^2}$ and $R^2 = 1 - \sum_{i}(y_i - \hat{y}_i)^2 / \sum_{i}(y_i - \bar{y})^2$, where $m$ is the number of test observations and $\bar{y}$ their mean. A lower RMSE and a higher $R^2$ mean better predictions. When the dependent variable is a logarithm, an error on the log scale can be read as a relative error (in %). \adj{The RMSE on the log scale is the main evaluation metric, as athletic directors want to compare programs of very different sizes: a relative error of 20\% then counts the same for a program with 1 million USD as for one with 100 million USD revenue. Squaring the errors penalizes large mistakes more than small ones, which is relevant because a strongly wrong revenue estimate can lead to a seriously wrong budget. To check whether the errors depend on the size of a program, the test RMSE is also computed per revenue decile.} To get predictions on the original scale, the predictions are transformed back with $\exp(\hat{y}_i)$. \adj{The RMSE in USD is also reported, since budgets are planned in dollars, but} on the original scale \adj{it} is mostly determined by the largest observations.
+Both models are estimated on the training set and compared on the test set with $\text{RMSE} = \sqrt{\frac{1}{m}\sum_{i=1}^{m} (y_i - \hat{y}_i)^2}$ and $R^2 = 1 - \sum_{i}(y_i - \hat{y}_i)^2 / \sum_{i}(y_i - \bar{y})^2$, where $m$ is the number of test observations and $\bar{y}$ their mean. A lower RMSE and a higher $R^2$ mean better predictions. When the dependent variable is a logarithm, an error on the log scale can be read as a relative error (in %). \adj{The RMSE on the log scale is the main evaluation metric, as athletic directors want to compare programs of very different sizes: a relative error of 20\% then counts the same for a program with 1 million USD as for one with 100 million USD revenue. Squaring the errors penalizes large mistakes more than small ones, which is relevant because a strongly wrong revenue estimate can lead to a seriously wrong budget. To check whether the errors depend on the size of a program, the test institutions are sorted by revenue and split into ten equally sized revenue groups (each containing 10% of the test institutions), and the test RMSE is computed per group.} To get predictions on the original scale, the predictions are transformed back with $\exp(\hat{y}_i)$. \adj{The RMSE in USD is also reported, since budgets are planned in dollars, but} on the original scale \adj{it} is mostly determined by the largest observations.
 
 # 4. Results
 
@@ -418,7 +418,7 @@ In the PCR, the components and dummies explain 94.5% of the variance of log reve
 
 For ridge regression, cross-validation chose a very small penalty ($\lambda_{\min}$ = 5.0e-04), so the results of it are very similar to OLS. The largest ridge coefficients are the division dummy variables, followed by the salary of head coaches of men's teams.
 
-On the test set, both models predict log revenue well (Appendix, Table 3). The PCR has the lowest RMSE on the log scale (0.425, $R^2$ = 0.916), so three components and the divisions contain almost the same information as all 28 characteristics. On the original scale, ridge regression with $\lambda_{\min}$ has the lowest RMSE (8.78 million USD). These errors mainly come from the largest programs. The seven FBS programs in the test set cause 71% of the squared error. \adj{Per revenue decile (Appendix, Table 4), the errors on the log scale are largest for the 20\% smallest and the 10\% largest programs (RMSE of about 0.5 to 0.7, compared with about 0.2 to 0.4 in the middle deciles), and the largest programs are systematically underpredicted by about 16\%.} The predicted revenues of the ten new institutions (Appendix, Table \adj{5}) range from 1.7 million USD for the NAIA Division I program to 115.2 (PCR) and 142.2 million USD (ridge) for the FBS program.
+On the test set, both models predict log revenue well (Appendix, Table 3). The PCR has the lowest RMSE on the log scale (0.425, $R^2$ = 0.916), so three components and the divisions contain almost the same information as all 28 characteristics. On the original scale, ridge regression with $\lambda_{\min}$ has the lowest RMSE (8.78 million USD). These errors mainly come from the largest programs. The seven FBS programs in the test set cause 71% of the squared error. \adj{Per revenue group (Appendix, Table 4), the errors on the log scale are largest for the 20\% smallest and the 10\% largest programs (RMSE of about 0.5 to 0.7, compared with about 0.2 to 0.4 in the middle groups), and the largest programs are systematically underpredicted by about 16\%.} The predicted revenues of the ten new institutions (Appendix, Table \adj{5}) range from 1.7 million USD for the NAIA Division I program to 115.2 (PCR) and 142.2 million USD (ridge) for the FBS program.
 
 # 5. Conclusions and Discussion
 
@@ -488,7 +488,7 @@ knitr::kable(tab_eval, format = "latex", position = "H", digits = 3, booktabs = 
 tab_dec <- t(rmse_dec[, 1:2])
 rownames(tab_dec) <- c("PCR", "Ridge ($\\lambda_{\\min}$)")
 knitr::kable(tab_dec, format = "latex", position = "H", digits = 2, booktabs = TRUE, escape = FALSE,
-             caption = "\\textcolor{red}{Test RMSE on the log scale per revenue decile (1 = lowest, 10 = highest revenue).}")
+             caption = "\\textcolor{red}{Test RMSE on the log scale per revenue group, each containing 10\\% of the test institutions (1 = lowest, 10 = highest revenue).}")
 ```
 
 ```{r tab-pred, echo=FALSE, results='asis'}
@@ -625,9 +625,9 @@ err_by_class <- data.frame(classification = test_data$classification,   # where 
   group_by(classification) %>% summarise(n = n(), share_of_squared_err = sum(sq_err_rev)) %>%
   mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% arrange(desc(share_of_squared_err))
 err_by_class                                                    # fbs schools cause most of the usd error
-@@dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)@@
-@@rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile (appendix table 4)@@
-@@round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted@@
+@@dec <- cut(rank(y_test), 10, labels = 1:10)                     # 10 equally sized revenue groups of the test set (1 = lowest)@@
+@@rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per revenue group (appendix table 4)@@
+@@round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per revenue group, < 0 = underpredicted@@
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc],
                          classification = prediction_new$classification, sector = prediction_new$sector)

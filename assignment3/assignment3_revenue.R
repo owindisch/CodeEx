@@ -296,8 +296,8 @@ err_by_class <- data.frame(classification = test_data$classification, # where do
 print(err_by_class, n = Inf) # fbs schools cause most of the dollar error
 
 dec <- cut(rank(y_test), 10, labels = 1:10) # revenue deciles of the test set (1 = lowest revenue)
-rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per decile
-bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per decile, < 0 = underpredicted
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))) # rmse (log) per revenue group
+bias_dec <- sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)) # mean error per revenue group, < 0 = underpredicted
 round(rmse_dec, 2); round(bias_dec, 2)
 
 op <- par(mfrow = c(1, 2)) # observed vs predicted log revenue, red line = perfect prediction
@@ -358,7 +358,7 @@ knitr::kable(tab_eval, format = "latex", position = "H", digits = 3, booktabs = 
 tab_dec <- t(rmse_dec[, 1:2])
 rownames(tab_dec) <- c("PCR", "Ridge ($\\lambda_{\\min}$)")
 knitr::kable(tab_dec, format = "latex", position = "H", digits = 2, booktabs = TRUE, escape = FALSE,
-             caption = "Test RMSE on the log scale per revenue decile (1 = lowest, 10 = highest revenue).")
+             caption = "Test RMSE on the log scale per revenue group, each containing 10\\% of the test institutions (1 = lowest, 10 = highest revenue).")
 
 tab_pred <- pred_out
 names(tab_pred) <- c("ID", "Classification", "PCR", "Ridge")
