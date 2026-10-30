@@ -533,7 +533,7 @@ revenue <- ggplot(athletics, aes(revenue / 1e6)) + geom_histogram(bins = 50, fil
   labs(title = "Revenue of athletics programs", x = "Revenue (in million USD)", y = "Count") + theme_minimal()
 logrevenue <- ggplot(athletics, aes(log(revenue))) + geom_histogram(bins = 50, fill = "purple", color = "white") +
   labs(title = "Log revenue", x = "log(revenue)", y = "Count") + theme_minimal()
-grid.arrange(revenue, logrevenue, ncol = 2)                     # very skewed, the log is more symmetric
+grid.arrange(revenue, logrevenue, ncol = 2)                     # appendix figure 1: very skewed, the log is more symmetric
 
 count_vars  <- c("ugrad_men", "ugrad_women", "athletes_men", "athletes_women", "teams_men", "teams_women",
                  grep("^partic_", names(athletics), value = TRUE), "hc_men", "hc_women", "ac_men", "ac_women") # logged
@@ -577,15 +577,16 @@ set.seed(123); eigs.boot <- boot(data = X_pca, statistic = my_boot_pca, R = 1000
 kaiser_boot <- data.frame(PC = 1:p, Eigenvalue = eigenvalues, Lower = apply(eigs.boot, 2, quantile, 0.025),
                           Upper = apply(eigs.boot, 2, quantile, 0.975))
 k_kaiser_boot <- which(kaiser_boot$Lower <= 1)[1] - 1           # bootstrapped kaiser, whole confidence interval above 1
+round(data.frame(kaiser_boot[1:6, 1:2], VAF = 100 * vaf[1:6], Cum_VAF = 100 * cum_vaf[1:6], Perm_97.5 = perm_range[1:6, 2], kaiser_boot[1:6, 3:4]), 2) # appendix table 1
 data.frame(Method = c("Kaiser", "80% VAF", "Permutation test", "Bootstrapped Kaiser"),
            PCs = c(k_kaiser, k_vaf80, k_perm, k_kaiser_boot))
 n_pc <- k_perm                                                  # chosen: permutation test
 vaf.boot   <- rowSums(eigs.boot[, 1:n_pc, drop = FALSE]) / p    # bootstrapped vaf of the chosen pcs
 perc.alpha <- quantile(vaf.boot, c(0.025, 0.975)); round(100 * c(cum_vaf[n_pc], perc.alpha), 1)
 corpca  <- cor(X_pca, fitpca$scores)[, 1:n_pc]                  # loadings
-fit_var <- cbind(corpca, Fit = rowSums(corpca^2)); round(fit_var, 2) # fit per variable
+fit_var <- cbind(corpca, Fit = rowSums(corpca^2)); round(fit_var, 2) # fit per variable (appendix table 2)
 biplot(fitpca, pc.biplot = TRUE, scale = 1, choices = 1:2, col = c("grey", "red"), asp = 1,
-       cex = c(0.4, 0.6), xlabs = rep("o", nrow(X_pca)))      # points = institutions, arrows = variables
+       cex = c(0.4, 0.6), xlabs = rep("o", nrow(X_pca)))      # appendix figure 2: points = institutions, arrows = variables
 
 train_scores <- data.frame(fitpca$scores[, 1:n_pc], classification = train_data$classification,
                            sector = train_data$sector, log_revenue = train_data$log_revenue)
@@ -616,14 +617,14 @@ pred_log <- list("PCR" = predict(fit_pcr, newdata = test_scores),
 eval_tab <- do.call(rbind, lapply(names(pred_log), function(m) { pl <- pred_log[[m]]
   data.frame(Model = m, RMSE_log = rmse(y_test, pl), R2_log = 1 - sum((y_test - pl)^2) / sum((y_test - mean(y_test))^2),
              RMSE_rev_M = rmse(rev_test, exp(pl)) / 1e6) }))   # rmse in million usd after exp()
-eval_tab
+eval_tab                                                        # appendix table 3
 err_by_class <- data.frame(classification = test_data$classification,   # where do the usd errors come from?
                            sq_err_rev = (rev_test - exp(pred_log[["Ridge lambda.min"]]))^2) %>%
   group_by(classification) %>% summarise(n = n(), share_of_squared_err = sum(sq_err_rev)) %>%
   mutate(share_of_squared_err = share_of_squared_err / sum(share_of_squared_err)) %>% arrange(desc(share_of_squared_err))
 err_by_class                                                    # fbs schools cause most of the usd error
 dec <- cut(rank(y_test), 10, labels = 1:10)                     # revenue deciles of the test set (1 = lowest)
-rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile
+rmse_dec <- sapply(pred_log, function(pl) tapply((y_test - pl)^2, dec, function(e) sqrt(mean(e)))); round(rmse_dec, 2) # rmse per decile (appendix table 4)
 round(sapply(pred_log, function(pl) tapply(pl - y_test, dec, mean)), 2) # mean error per decile, < 0 = underpredicted
 
 new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[, 1:n_pc],
@@ -631,6 +632,6 @@ new_scores <- data.frame(predict(fitpca, newdata = prediction_new[, num_vars])[,
 pred_out <- data.frame(id = prediction_new$id, classification = prediction_new$classification,
                        rev_PCR_M = exp(predict(fit_pcr, newdata = new_scores)) / 1e6,          # back to usd with exp()
                        rev_Ridge_M = exp(as.numeric(predict(result.ridge.min, newx = X_new))) / 1e6)
-pred_out
+pred_out                                                        # appendix table 5
 \end{lstlisting}
 \endgroup
