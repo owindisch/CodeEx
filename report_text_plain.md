@@ -8,7 +8,7 @@ The data were provided by a telecom provider and contain 4,000 customers. For ea
 
 # 3. Methods
 
-To identify which characteristics are related to churn, a classification tree is used. It predicts a categorical outcome by asking a sequence of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups, and the final groups (*leaves*) predict their most common class. This yields easy-to-read if-then rules (James et al., 2013). Let $Y$ be a categorical response with $K$ classes and $X_1, \dots, X_p$ the $p$ predictors. The tree is built and assessed in five steps.
+To identify which characteristics are related to churn, a decision tree is used. It predicts a categorical outcome by asking a sequence of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups, and the final groups (*leaves*) predict their most common class. This yields easy-to-read if-then rules (James et al., 2013). Let $Y$ be a categorical response with $K$ classes and $X_1, \dots, X_p$ the $p$ predictors. The tree is built and assessed in five steps.
 
 *First*, the tree is grown on a training set by *recursive binary splitting* (CART; Breiman et al., 1984). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
