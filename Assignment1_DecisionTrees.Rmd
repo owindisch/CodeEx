@@ -78,7 +78,7 @@ pct <- function(x) sprintf("%.1f%%", 100 * x) # for easier writing in text secti
 
 # 1. Introduction
 
-Telecom providers lose revenue through churn: customers who end their contract and switch to a competitor. Winning a new customer costs more than keeping one, and customers become more profitable the longer they stay (Gupta et al., 2006), so retention campaigns pay off, but only if they reach the right customers. This report addresses the question: **which customer characteristics are related to churn, and which customers should a telecom provider target to reduce it?**
+Since acquiring a new customer costs more than retaining an existing one, and customers become more profitable the longer they stay (Gupta et al., 2006), it is in a company's best interest to minimise churn, i.e. customers ending their contract and switching to a competitor. This report therefore investigates the churn behaviour of `r format(nrow(data), big.mark = ",")` customers of a telecom provider to gain insight into the factors that play a role in their decision to leave, addressing the question: **which customer characteristics are related to churn, and which customers should a telecom provider target to reduce it?**
 
 # 2. Data
 
