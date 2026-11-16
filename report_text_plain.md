@@ -8,15 +8,19 @@ The data were provided by a telecom provider and contain 4,000 customers. For ea
 
 # 3. Methods
 
-**Intuition.** A classification tree predicts a categorical outcome by asking a sequence of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two groups that are more alike in their outcome, and the final groups (*leaves*) predict their most common class. This yields easy-to-read if-then rules (James et al., 2013).
+A classification tree predicts a categorical outcome by asking a sequence of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups, and the final groups (*leaves*) predict their most common class. This yields easy-to-read if-then rules (James et al., 2013). Let $Y$ be a categorical response with $K$ classes and $X_1, \dots, X_p$ the $p$ predictors. The tree is built and assessed in five steps.
 
-**Growing and pruning.** Let $Y$ be a categorical response with $K$ classes and $X_1, \dots, X_p$ the $p$ predictors. The tree is grown by *recursive binary splitting* (CART; Breiman et al., 1984): at each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
+*First*, the tree is grown on a training set by *recursive binary splitting* (CART; Breiman et al., 1984). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
-and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. $G_m = 0$ for a pure node, and $\hat p_{mk}$ is the predicted probability of class $k$. A fully grown tree also fits noise (overfitting), so it is *pruned* to the subtree $T$ that minimises
+and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. $G_m = 0$ for a pure node, and $\hat p_{mk}$ is the predicted probability of class $k$.
+
+*Second*, because a fully grown tree also fits noise (overfitting), it is *pruned* to the subtree $T$ that minimises
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
 where $R(T)$ is the share of misclassified training observations, $|T|$ the number of leaves of $T$, $R(T_0)$ the misclassification rate of the tree without splits, and $cp \geq 0$ the **complexity parameter**. A split is only kept if it lowers the relative error by at least $cp$, so a larger $cp$ gives a smaller tree.
 
-**Tuning and evaluation.** The tree is grown and tuned on a training set and evaluated on a separate test set. The value of $cp$ is chosen by **$K_f$-fold cross-validation**: the training set is divided into $K_f$ parts, and the tree is fitted on $K_f - 1$ parts and tested on the remaining part, each part in turn. This gives a *cross-validated error* with its standard error; lower is better. The **one-standard-error rule** then selects the smallest tree whose cross-validated error lies within one standard error of the minimum (Hastie et al., 2009), favouring a simpler tree. On the test set, the tree is judged by its **accuracy** (share of correct predictions), **sensitivity** (share of actual positives predicted positive) and **specificity** (share of actual negatives predicted negative): higher is better, and the accuracy should clearly exceed the **baseline accuracy** of always predicting the most common class. Finally, a predictor's **variable importance** is its share of the total Gini reduction over all (also surrogate) splits; higher means more influential.
+*Third*, $cp$ is chosen by **$K_f$-fold cross-validation**: the training set is divided into $K_f$ parts, and the tree is fitted on $K_f - 1$ parts and tested on the remaining part, each part in turn. This gives a *cross-validated error* with its standard error; lower is better. The **one-standard-error rule** selects the smallest tree whose cross-validated error lies within one standard error of the minimum (Hastie et al., 2009).
+
+*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **sensitivity** (share of actual positives predicted positive) and **specificity** (share of actual negatives predicted negative). Higher is better, and the accuracy should clearly exceed the **baseline accuracy** of always predicting the most common class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction over all (also surrogate) splits; higher means more influential.
 
 # 4. Results
 
