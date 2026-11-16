@@ -46,15 +46,18 @@ full <- rpart(Churn ~ ., data = train, method = "class",
 ```{r tune}
 # 4. Tune cp with the 1-SE rule: smallest tree whose CV error (xerror) is
 #    within one standard error (xstd) of the minimum CV error
-cpt    <- full$cptable
-best   <- cpt[which.min(cpt[, "xerror"]), ]
-row1se <- which(cpt[, "xerror"] <= best["xerror"] + best["xstd"])[1]
-cp.1se <- cpt[row1se, "CP"]
+cp_table <- full$cptable
+# row with min. cross-validated error
+row_min  <- cp_table[which.min(cp_table[, "xerror"]), ]
+# row number of tree chosen by 1-SE rule
+row_1se  <- which(cp_table[, "xerror"] <= row_min["xerror"] + row_min["xstd"])[1]
+# cp value of that tree
+cp_1se   <- cp_table[row_1se, "CP"]
 ```
 
 ```{r prune}
 # 5. Prune the full tree back to the chosen cp; variable importance in %
-tree <- prune(full, cp = cp.1se)
+tree <- prune(full, cp = cp_1se)
 imp  <- round(100 * tree$variable.importance / sum(tree$variable.importance), 1)
 ```
 
@@ -90,7 +93,7 @@ For each customer we observe *Churn* (yes/no; `r format(sum(data$Churn == "Yes")
 
 # 4. Results
 
-**Tuning.** The full tree has `r max(cpt[, "nsplit"])` splits and a cross-validated relative error of `r sprintf("%.3f", cpt[nrow(cpt), "xerror"])`. The error is lowest (`r sprintf("%.3f", best["xerror"])`) at `r best["nsplit"]` splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = `r sprintf("%.4f", cp.1se)`: a tree with **`r cpt[row1se, "nsplit"]` splits and `r cpt[row1se, "nsplit"] + 1` leaves** (xerror `r sprintf("%.3f", cpt[row1se, "xerror"])`, Figure 1).
+**Tuning.** The full tree has `r max(cp_table[, "nsplit"])` splits and a cross-validated relative error of `r sprintf("%.3f", cp_table[nrow(cp_table), "xerror"])`. The error is lowest (`r sprintf("%.3f", row_min["xerror"])`) at `r row_min["nsplit"]` splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)`: a tree with **`r cp_table[row_1se, "nsplit"]` splits and `r cp_table[row_1se, "nsplit"] + 1` leaves** (xerror `r sprintf("%.3f", cp_table[row_1se, "xerror"])`, Figure 1).
 
 ```{r tree-plot, fig.width=8, fig.height=3.4, out.width="100%", fig.cap="Pruned tree. Each node shows the predicted class, the churn probability and the share of training customers."}
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
@@ -136,13 +139,13 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 
 # Appendix A: Tables
 
-**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp.1se)` (8 splits).
+**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (8 splits).
 
 ```{r cptable}
-keep <- cpt[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, best["nsplit"], max(cpt[, "nsplit"]))
-tab  <- data.frame(cp = sprintf("%.4f", cpt[keep, "CP"]), Splits = cpt[keep, "nsplit"],
-                   Leaves = cpt[keep, "nsplit"] + 1,
-                   round(cpt[keep, c("rel error", "xerror", "xstd")], 3))
+keep <- cp_table[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, row_min["nsplit"], max(cp_table[, "nsplit"]))
+tab  <- data.frame(cp = sprintf("%.4f", cp_table[keep, "CP"]), Splits = cp_table[keep, "nsplit"],
+                   Leaves = cp_table[keep, "nsplit"] + 1,
+                   round(cp_table[keep, c("rel error", "xerror", "xstd")], 3))
 names(tab)[4:6] <- c("Training error", "CV error", "CV std. error")
 knitr::kable(tab, row.names = FALSE)
 ```
