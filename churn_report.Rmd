@@ -25,28 +25,28 @@ library(rpart.plot)
 ```{r data}
 # 1. Load the data (data frame `data`: 4,000 customers, 13 variables)
 load("Churn.RData")
-churn.rate <- mean(data$Churn == "Yes")            # overall churn rate (37.5%)
+churn_rate <- mean(data$Churn == "Yes")   # overall churn rate (37.5%)
 ```
 
 ```{r split}
 # 2. Split 70/30 into training and test set; the seed makes the split reproducible
 set.seed(123)
-idx   <- sample(nrow(data), 0.7 * nrow(data))
-train <- data[idx, ]
-test  <- data[-idx, ]
+train_rows <- sample(nrow(data), 0.7 * nrow(data))   # random row numbers for training
+train      <- data[train_rows, ]                     # 2,800 training customers
+test       <- data[-train_rows, ]                    # remaining 1,200 test customers
 ```
 
 ```{r grow}
 # 3. Grow the full tree on the training set: cp = 0 switches off pruning,
 #    xval = 10 stores the 10-fold cross-validated error for every cp value
-full <- rpart(Churn ~ ., data = train, method = "class",
-              control = rpart.control(cp = 0, xval = 10))
+full_tree <- rpart(Churn ~ ., data = train, method = "class",
+                   control = rpart.control(cp = 0, xval = 10))
 ```
 
 ```{r tune}
 # 4. Tune cp with the 1-SE rule: smallest tree whose CV error (xerror) is
 #    within one standard error (xstd) of the minimum CV error
-cp_table <- full$cptable
+cp_table <- full_tree$cptable
 # row with min. cross-validated error
 row_min  <- cp_table[which.min(cp_table[, "xerror"]), ]
 # row number of tree chosen by 1-SE rule
@@ -57,22 +57,23 @@ cp_1se   <- cp_table[row_1se, "CP"]
 
 ```{r prune}
 # 5. Prune the full tree back to the chosen cp; variable importance in %
-tree <- prune(full, cp = cp_1se)
-imp  <- round(100 * tree$variable.importance / sum(tree$variable.importance), 1)
+pruned_tree    <- prune(full_tree, cp = cp_1se)
+var_importance <- round(100 * pruned_tree$variable.importance /
+                          sum(pruned_tree$variable.importance), 1)
 ```
 
 ```{r predict}
 # 6. Predict the test set (majority class of the leaf, i.e. cut-off 0.5)
 #    and evaluate out-of-sample performance
-pred <- predict(tree, test, type = "class")
-cm   <- table(Predicted = pred, Actual = test$Churn)
-acc  <- mean(pred == test$Churn)
-sens <- cm["Yes", "Yes"] / sum(cm[, "Yes"])
-spec <- cm["No", "No"]   / sum(cm[, "No"])
-base <- mean(test$Churn == "No")                   # accuracy of always predicting "No"
-acc.train <- mean(predict(tree, train, type = "class") == train$Churn)
-acc.full  <- mean(predict(full, test, type = "class") == test$Churn)
-pct <- function(x) sprintf("%.1f%%", 100 * x)
+test_pred     <- predict(pruned_tree, test, type = "class")
+conf_matrix   <- table(Predicted = test_pred, Actual = test$Churn)
+acc_test      <- mean(test_pred == test$Churn)
+sensitivity   <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"])  # churners detected
+specificity   <- conf_matrix["No", "No"]   / sum(conf_matrix[, "No"])   # stayers cleared
+acc_baseline  <- mean(test$Churn == "No")   # accuracy of always predicting "No"
+acc_train     <- mean(predict(pruned_tree, train, type = "class") == train$Churn)
+acc_full_tree <- mean(predict(full_tree, test, type = "class") == test$Churn)
+pct <- function(x) sprintf("%.1f%%", 100 * x)   # helper: format a share as a percentage
 ```
 
 # 1. Introduction
@@ -81,7 +82,7 @@ Customer churn (customers ending their contract and leaving for a competitor) is
 
 # 2. Data
 
-For each customer we observe *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn.rate)` churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*), which take the value "No internet service" for the 19.4% of customers without internet. We randomly split the data (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**, with similar churn rates (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). Always predicting "no churn" gives a baseline test accuracy of `r pct(base)`.
+For each customer we observe *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn_rate)` churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*), which take the value "No internet service" for the 19.4% of customers without internet. We randomly split the data (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**, with similar churn rates (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). Always predicting "no churn" gives a baseline test accuracy of `r pct(acc_baseline)`.
 
 # 3. Methods
 
@@ -96,24 +97,24 @@ For each customer we observe *Churn* (yes/no; `r format(sum(data$Churn == "Yes")
 **Tuning.** The full tree has `r max(cp_table[, "nsplit"])` splits and a cross-validated relative error of `r sprintf("%.3f", cp_table[nrow(cp_table), "xerror"])`. The error is lowest (`r sprintf("%.3f", row_min["xerror"])`) at `r row_min["nsplit"]` splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)`: a tree with **`r cp_table[row_1se, "nsplit"]` splits and `r cp_table[row_1se, "nsplit"] + 1` leaves** (xerror `r sprintf("%.3f", cp_table[row_1se, "xerror"])`, Figure 1).
 
 ```{r tree-plot, fig.width=8, fig.height=3.4, out.width="100%", fig.cap="Pruned tree. Each node shows the predicted class, the churn probability and the share of training customers."}
-rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
+rpart.plot(pruned_tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 ```
 
-**Interpretation.** *Contract* is the root split and the most important variable (`r imp["Contract"]`% of importance), followed by *tenure* (`r imp["tenure"]`%), *TotalCharges* (`r imp["TotalCharges"]`%), *TechSupport* (`r imp["TechSupport"]`%) and *OnlineSecurity* (`r imp["OnlineSecurity"]`%). The main rules are:
+**Interpretation.** *Contract* is the root split and the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%), *TotalCharges* (`r var_importance["TotalCharges"]`%), *TechSupport* (`r var_importance["TechSupport"]`%) and *OnlineSecurity* (`r var_importance["OnlineSecurity"]`%). The main rules are:
 
 1. **One- or two-year contracts:** 41% of customers, only 11% churn.
 2. **Month-to-month, fibre optic, tenure under 17 months:** the highest-risk group (19% of customers, 82% churn).
 3. **Month-to-month fibre customers with longer tenure** churn at 35% with online security. Without it, those paying at least \$74.28 per month churn at 59% without tech support, against 41% with it.
 4. **Month-to-month DSL or no internet:** 29% churn after 6 months' tenure, but 64% for newer customers without online security.
 
-**Test-set performance.** The pruned tree classifies **`r pct(acc)`** of the `r format(nrow(test), big.mark = ",")` test customers correctly, against the `r pct(base)` baseline. Its training accuracy (`r pct(acc.train)`) is similar, so it generalises well, while the unpruned tree reaches only `r pct(acc.full)`. It detects **`r pct(sens)`** of churners (sensitivity; `r cm["Yes", "Yes"]` of `r sum(cm[, "Yes"])`) and correctly clears **`r pct(spec)`** of non-churners (specificity; `r cm["No", "No"]` of `r sum(cm[, "No"])`). Of the `r sum(cm["Yes", ])` customers it flags, `r pct(cm["Yes", "Yes"] / sum(cm["Yes", ]))` actually churn.
+**Test-set performance.** The pruned tree classifies **`r pct(acc_test)`** of the `r format(nrow(test), big.mark = ",")` test customers correctly, against the `r pct(acc_baseline)` baseline. Its training accuracy (`r pct(acc_train)`) is similar, so it generalises well, while the unpruned tree reaches only `r pct(acc_full_tree)`. It detects **`r pct(sensitivity)`** of churners (sensitivity; `r conf_matrix["Yes", "Yes"]` of `r sum(conf_matrix[, "Yes"])`) and correctly clears **`r pct(specificity)`** of non-churners (specificity; `r conf_matrix["No", "No"]` of `r sum(conf_matrix[, "No"])`). Of the `r sum(conf_matrix["Yes", ])` customers it flags, `r pct(conf_matrix["Yes", "Yes"] / sum(conf_matrix["Yes", ]))` actually churn.
 
 # 5. Conclusions and Discussion
 
-A pruned nine-leaf tree predicts churn of unseen customers with `r pct(acc)` accuracy (baseline `r pct(base)`). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and the **service bundle** (fibre internet, online security and tech support). This suggests three actions: (1) encourage month-to-month customers (56% churn) to move to longer contracts (11%); (2) prioritise new fibre-optic customers (82% churn) with onboarding support and a review of fibre pricing and quality; and (3) offer online security and tech support at a discount, as customers with these add-ons churn less.
+A pruned nine-leaf tree predicts churn of unseen customers with `r pct(acc_test)` accuracy (baseline `r pct(acc_baseline)`). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and the **service bundle** (fibre internet, online security and tech support). This suggests three actions: (1) encourage month-to-month customers (56% churn) to move to longer contracts (11%); (2) prioritise new fibre-optic customers (82% churn) with onboarding support and a review of fibre pricing and quality; and (3) offer online security and tech support at a discount, as customers with these add-ons churn less.
 
-**Limitations.** The tree misses `r pct(1 - sens)` of churners; a lower probability cut-off would catch more at the cost of more false alarms. Single trees are unstable, so the exact cut-points (e.g. 16.5 months) are approximate. Finally, the rules show associations, not causes; a controlled retention campaign should test whether the proposed actions actually reduce churn.
+**Limitations.** The tree misses `r pct(1 - sensitivity)` of churners; a lower probability cut-off would catch more at the cost of more false alarms. Single trees are unstable, so the exact cut-points (e.g. 16.5 months) are approximate. Finally, the rules show associations, not causes; a controlled retention campaign should test whether the proposed actions actually reduce churn.
 
 # References
 
@@ -142,18 +143,21 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 **Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (8 splits).
 
 ```{r cptable}
-keep <- cp_table[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, row_min["nsplit"], max(cp_table[, "nsplit"]))
-tab  <- data.frame(cp = sprintf("%.4f", cp_table[keep, "CP"]), Splits = cp_table[keep, "nsplit"],
-                   Leaves = cp_table[keep, "nsplit"] + 1,
-                   round(cp_table[keep, c("rel error", "xerror", "xstd")], 3))
-names(tab)[4:6] <- c("Training error", "CV error", "CV std. error")
-knitr::kable(tab, row.names = FALSE)
+cp_rows    <- cp_table[, "nsplit"] %in%
+  c(0:4, 6, 8, 10, 20, row_min["nsplit"], max(cp_table[, "nsplit"]))
+cp_summary <- data.frame(cp = sprintf("%.4f", cp_table[cp_rows, "CP"]),
+                         Splits = cp_table[cp_rows, "nsplit"],
+                         Leaves = cp_table[cp_rows, "nsplit"] + 1,
+                         round(cp_table[cp_rows, c("rel error", "xerror", "xstd")], 3))
+names(cp_summary)[4:6] <- c("Training error", "CV error", "CV std. error")
+knitr::kable(cp_summary, row.names = FALSE)
 ```
 
 **Table A2.** Relative variable importance in the pruned tree (% of total; includes surrogate splits).
 
 ```{r importance}
-knitr::kable(data.frame(Variable = names(imp), `Importance (%)` = imp, check.names = FALSE),
+knitr::kable(data.frame(Variable = names(var_importance),
+                        `Importance (%)` = var_importance, check.names = FALSE),
              row.names = FALSE)
 ```
 
@@ -168,9 +172,11 @@ The code below produces every number, table and figure in this report (R 4.3.3, 
 
 ```{r echo=TRUE, eval=FALSE}
 # 7. Figure 1 and test-set results: plot the pruned tree, print the confusion matrix
-rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
+rpart.plot(pruned_tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
-cm; c(accuracy = acc, sensitivity = sens, specificity = spec, baseline = base)
-printcp(full); plotcp(full)    # Table A1: CV error for each cp (with 1-SE line)
-imp                            # Table A2: variable importance
+conf_matrix; c(accuracy = acc_test, sensitivity = sensitivity,
+               specificity = specificity, baseline = acc_baseline)
+printcp(full_tree); plotcp(full_tree)   # Table A1: CV error for each cp (1-SE line)
+var_importance                          # Table A2
 ```
+
