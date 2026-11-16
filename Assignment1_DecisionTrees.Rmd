@@ -38,7 +38,8 @@ churn_rate <- mean(data$Churn == "Yes")  # this is the overall churn rate: 0.375
 ```
 ```{r data split, include=FALSE}
 set.seed(123)
-train_rows <- sample(nrow(data), 0.7 * nrow(data))
+train_rows <- unlist(lapply(split(seq_len(nrow(data)), data$Churn),
+                            function(rows) sample(rows, round(0.7 * length(rows))))) # 70% of churners and 70% of non-churners
 train <- data[train_rows, ]
 test  <- data[-train_rows, ]
 ```
@@ -81,7 +82,7 @@ Customer churn (customers ending their contract and leaving for a competitor) is
 
 # 2. Data
 
-For each customer, the data contain *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn_rate)` churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*; "No internet service" for the 19.4% without internet). The data are randomly split (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**, with similar churn rates (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). Always predicting "no churn" gives a baseline test accuracy of `r pct(acc_baseline)`.
+For each customer, the data contain *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn_rate)` churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*; "No internet service" for the 19.4% without internet). The data are split (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**. The split is stratified by *Churn* (70% of churners and 70% of non-churners are drawn into the training set), so both sets have the same churn rate (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). Always predicting "no churn" gives a baseline test accuracy of `r pct(acc_baseline)`.
 
 # 3. Methods
 
@@ -97,10 +98,10 @@ For each customer, the data contain *Churn* (yes/no; `r format(sum(data$Churn ==
 
 **Interpretation.** *Contract* is the root split and the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%), *TotalCharges* (`r var_importance["TotalCharges"]`%), *TechSupport* (`r var_importance["TechSupport"]`%) and *OnlineSecurity* (`r var_importance["OnlineSecurity"]`%). The main rules are:
 
-1. **One- or two-year contracts:** 41% of customers, only 11% churn.
-2. **Month-to-month, fibre optic, tenure under 17 months:** the highest-risk group (19% of customers, 82% churn).
-3. **Month-to-month fibre customers with longer tenure** churn at 35% with online security. Without it, those paying at least \$74.28 per month churn at 59% without tech support, against 41% with it.
-4. **Month-to-month DSL or no internet:** 29% churn after 6 months' tenure, but 64% for newer customers without online security.
+1. **One- or two-year contracts:** 40% of customers, only 10% churn.
+2. **Month-to-month, fibre optic, tenure under 16 months:** the highest-risk group (18% of customers, 81% churn).
+3. **Month-to-month fibre customers with longer tenure** churn depending on price: 62% for those paying at least \$95.55 per month and 63% for those paying \$83.65--\$95.55 with total charges below \$3,643, against 30--42% for the others.
+4. **Month-to-month DSL or no internet:** 28% churn after 6 months' tenure, but 63% for newer customers without online backup.
 
 ```{r tree plot, fig.width=8, fig.height=2.9, out.width="100%", fig.cap="Pruned tree. Each node shows the predicted class, the churn probability and the share of training customers."}
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
@@ -111,9 +112,9 @@ rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
 
 # 5. Conclusions and Discussion
 
-A pruned nine-leaf tree predicts churn of unseen customers with `r pct(acc_test)` accuracy (baseline `r pct(acc_baseline)`). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and the **service bundle** (fibre internet, online security and tech support). Three actions follow: (1) encourage month-to-month customers (56% churn) to move to longer contracts (11%); (2) prioritise new fibre-optic customers (82% churn) with onboarding support; and (3) offer online security and tech support at a discount, as customers with these add-ons churn less.
+A pruned nine-leaf tree predicts churn of unseen customers with `r pct(acc_test)` accuracy (baseline `r pct(acc_baseline)`). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and **price and service** (fibre internet, monthly charges and add-ons). Three actions follow: (1) encourage month-to-month customers (55% churn) to move to longer contracts (10%); (2) prioritise new fibre-optic customers (81% churn) with onboarding support; and (3) review pricing for long-standing fibre customers paying more than about \$84 per month and promote add-ons such as online backup to new DSL customers.
 
-**Limitations.** The tree misses `r pct(1 - sensitivity)` of churners; a lower probability cut-off catches more, at the cost of false alarms. Single trees are unstable, so cut-points (e.g. 16.5 months) are approximate, and the rules show associations rather than causes, which a controlled retention campaign should test.
+**Limitations.** The tree misses `r pct(1 - sensitivity)` of churners; a lower probability cut-off catches more, at the cost of false alarms. Single trees are unstable, so cut-points (e.g. 15.5 months) are approximate, and the rules show associations rather than causes, which a controlled retention campaign should test.
 
 # References
 
@@ -142,7 +143,7 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 **Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (`r cp_table[row_1se, "nsplit"]` splits).
 
 ```{r cp table}
-cp_rows <- cp_table[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, row_min["nsplit"], max(cp_table[, "nsplit"]))
+cp_rows <- cp_table[, "nsplit"] <= 25 | cp_table[, "nsplit"] == max(cp_table[, "nsplit"])
 cp_summary <- data.frame(cp = sprintf("%.4f", cp_table[cp_rows, "CP"]),
                          Splits = cp_table[cp_rows, "nsplit"],
                          Leaves = cp_table[cp_rows, "nsplit"] + 1,
@@ -190,9 +191,11 @@ setwd("C:/Users/Gebruiker/OneDrive - Erasmus University Rotterdam/Seminar DSMA/D
 load("Churn.RData")
 churn_rate <- mean(data$Churn == "Yes")  # this is the overall churn rate: 0.375 or 37.5%
 
-# 3. Split 70/30 into training and test set; the seed makes the split reproducible
+# 3. Stratified 70/30 split: 70% of the churners and 70% of the non-churners go to the
+#    training set, so both sets keep the 37.5% churn rate; the seed makes it reproducible
 set.seed(123)
-train_rows <- sample(nrow(data), 0.7 * nrow(data))   # random row numbers for the training set
+train_rows <- unlist(lapply(split(seq_len(nrow(data)), data$Churn),
+                            function(rows) sample(rows, round(0.7 * length(rows))))) # 70% of churners and 70% of non-churners
 train <- data[train_rows, ]                          # 2,800 training customers
 test  <- data[-train_rows, ]                         # remaining 1,200 test customers
 
@@ -233,7 +236,7 @@ rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 
 # 9. Appendix A: cp table (Table A1) and variable importance (Table A2)
-cp_rows <- cp_table[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, row_min["nsplit"], max(cp_table[, "nsplit"]))
+cp_rows <- cp_table[, "nsplit"] <= 25 | cp_table[, "nsplit"] == max(cp_table[, "nsplit"])
 cp_summary <- data.frame(cp = sprintf("%.4f", cp_table[cp_rows, "CP"]),
                          Splits = cp_table[cp_rows, "nsplit"],
                          Leaves = cp_table[cp_rows, "nsplit"] + 1,

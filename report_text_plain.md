@@ -4,7 +4,7 @@ Customer churn (customers ending their contract and leaving for a competitor) is
 
 # 2. Data
 
-For each customer, the data contain *Churn* (yes/no; 1,500 customers or 37.5% churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*; "No internet service" for the 19.4% without internet). The data are randomly split (seed 123) into a **training set of 2,800 (70%)** and a **test set of 1,200 customers (30%)**, with similar churn rates (37.7% and 37.0%). Always predicting "no churn" gives a baseline test accuracy of 63.0%.
+For each customer, the data contain *Churn* (yes/no; 1,500 customers or 37.5% churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*; "No internet service" for the 19.4% without internet). The data are split (seed 123) into a **training set of 2,800 (70%)** and a **test set of 1,200 customers (30%)**. The split is stratified by *Churn* (70% of churners and 70% of non-churners are drawn into the training set), so both sets have the same churn rate (37.5% and 37.5%). Always predicting "no churn" gives a baseline test accuracy of 62.5%.
 
 # 3. Methods
 
@@ -16,24 +16,24 @@ For each customer, the data contain *Churn* (yes/no; 1,500 customers or 37.5% ch
 
 # 4. Results
 
-**Tuning.** The full tree has 101 splits and a cross-validated relative error of 0.698. The error is lowest (0.638) at 33 splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = 0.0047: a tree with **8 splits and 9 leaves** (xerror 0.653, Figure 1).
+**Tuning.** The full tree has 94 splits and a cross-validated relative error of 0.720. The error is lowest (0.622) at 15 splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = 0.0076: a tree with **8 splits and 9 leaves** (xerror 0.637, Figure 1).
 
-**Interpretation.** *Contract* is the root split and the most important variable (23.7% of importance), followed by *tenure* (18.8%), *TotalCharges* (13.5%), *TechSupport* (10.1%) and *OnlineSecurity* (9.8%). The main rules are:
+**Interpretation.** *Contract* is the root split and the most important variable (23.3% of importance), followed by *tenure* (17.6%), *TotalCharges* (12.5%), *TechSupport* (9.6%) and *OnlineSecurity* (9.2%). The main rules are:
 
-1. **One- or two-year contracts:** 41% of customers, only 11% churn.
-2. **Month-to-month, fibre optic, tenure under 17 months:** the highest-risk group (19% of customers, 82% churn).
-3. **Month-to-month fibre customers with longer tenure** churn at 35% with online security. Without it, those paying at least \$74.28 per month churn at 59% without tech support, against 41% with it.
-4. **Month-to-month DSL or no internet:** 29% churn after 6 months' tenure, but 64% for newer customers without online security.
+1. **One- or two-year contracts:** 40% of customers, only 10% churn.
+2. **Month-to-month, fibre optic, tenure under 16 months:** the highest-risk group (18% of customers, 81% churn).
+3. **Month-to-month fibre customers with longer tenure** churn depending on price: 62% for those paying at least \$95.55 per month and 63% for those paying \$83.65--\$95.55 with total charges below \$3,643, against 30--42% for the others.
+4. **Month-to-month DSL or no internet:** 28% churn after 6 months' tenure, but 63% for newer customers without online backup.
 
 [Figure 1: keep the `tree plot` chunk here]
 
-**Test-set performance.** The pruned tree classifies **76.3%** of the 1,200 test customers correctly, against the 63.0% baseline. Its training accuracy (77.8%) is similar, so it generalises well, while the unpruned tree reaches only 71.5%. It detects **63.1%** of churners (sensitivity; 280 of 444) and correctly clears **84.1%** of non-churners (specificity; 636 of 756).
+**Test-set performance.** The pruned tree classifies **76.5%** of the 1,200 test customers correctly, against the 62.5% baseline. Its training accuracy (78.0%) is similar, so it generalises well, while the unpruned tree reaches only 74.0%. It detects **65.1%** of churners (sensitivity; 293 of 450) and correctly clears **83.3%** of non-churners (specificity; 625 of 750).
 
 # 5. Conclusions and Discussion
 
-A pruned nine-leaf tree predicts churn of unseen customers with 76.3% accuracy (baseline 63.0%). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and the **service bundle** (fibre internet, online security and tech support). Three actions follow: (1) encourage month-to-month customers (56% churn) to move to longer contracts (11%); (2) prioritise new fibre-optic customers (82% churn) with onboarding support; and (3) offer online security and tech support at a discount, as customers with these add-ons churn less.
+A pruned nine-leaf tree predicts churn of unseen customers with 76.5% accuracy (baseline 62.5%). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and **price and service** (fibre internet, monthly charges and add-ons). Three actions follow: (1) encourage month-to-month customers (55% churn) to move to longer contracts (10%); (2) prioritise new fibre-optic customers (81% churn) with onboarding support; and (3) review pricing for long-standing fibre customers paying more than about \$84 per month and promote add-ons such as online backup to new DSL customers.
 
-**Limitations.** The tree misses 36.9% of churners; a lower probability cut-off catches more, at the cost of false alarms. Single trees are unstable, so cut-points (e.g. 16.5 months) are approximate, and the rules show associations rather than causes, which a controlled retention campaign should test.
+**Limitations.** The tree misses 34.9% of churners; a lower probability cut-off catches more, at the cost of false alarms. Single trees are unstable, so cut-points (e.g. 15.5 months) are approximate, and the rules show associations rather than causes, which a controlled retention campaign should test.
 
 # References
 
@@ -57,6 +57,6 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 
 # Appendix A
 
-**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = 0.0047 (8 splits).
+**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = 0.0076 (8 splits).
 
 **Table A2.** Relative variable importance in the pruned tree (percentage of total; includes surrogate splits).
