@@ -1,6 +1,5 @@
 ---
 title: "Predicting Customer Churn with a Decision Tree"
-date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   pdf_document:
     number_sections: false
@@ -8,6 +7,8 @@ fontsize: 11pt
 geometry: margin=2cm
 header-includes:
   - \usepackage{float}
+  - \usepackage{titling}
+  - \setlength{\droptitle}{-2cm}
 ---
 
 ```{r setup, include=FALSE}
@@ -73,67 +74,43 @@ pct <- function(x) sprintf("%.1f%%", 100 * x)
 
 # 1. Introduction
 
-Customer churn (customers ending their contract and leaving for a competitor) is costly for telecom providers. Acquiring a new customer is considerably more expensive than retaining an existing one, and a customer's profitability grows the longer they stay (Gupta et al., 2006). Knowing *which* customers are likely to leave, and *why*, allows a provider to target retention offers where they matter most.
-
-A telecom provider has asked us to analyse the churn behaviour of `r format(nrow(data), big.mark = ",")` of its customers. Because the provider wants insight into the factors behind customers' decisions, and not only a black-box prediction, we use a **classification tree**. This model predicts churn through a small set of transparent if-then rules that managers can read and act on (James et al., 2013; Yildirim & Kübler, 2023). We split the data into a training set and a test set. The training set is used to grow the tree and tune its size via the complexity parameter. The test set is used to assess how well the final tree predicts churn for customers it has not seen.
+Customer churn (customers ending their contract and leaving for a competitor) is costly for telecom providers: acquiring a new customer costs more than retaining one, and customers become more profitable the longer they stay (Gupta et al., 2006). A telecom provider has therefore asked us to analyse the churn behaviour of `r format(nrow(data), big.mark = ",")` of its customers. Because the provider wants insight into *why* customers leave, not just a black-box prediction, we use a **classification tree**, which predicts churn with transparent if-then rules that managers can act on (James et al., 2013; Yildirim & Kübler, 2023). We grow and tune the tree on a training set and assess its predictions on a separate test set.
 
 # 2. Data
 
-The data set contains `r format(nrow(data), big.mark = ",")` customers with no missing values. The target, *Churn*, is binary: `r sum(data$Churn == "Yes")` customers (`r pct(churn.rate)`) churned. There are twelve predictors in three groups:
-
-- **Account information:** *Contract* (month-to-month 59.7%, one year 19.3%, two year 21.0%) and *tenure* (1--72 months, median 25.5).
-- **Charges:** *MonthlyCharges* (\$18.40--\$118.75) and *TotalCharges* (\$18.85--\$8,672).
-- **Customer and service information:** *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none), and four add-ons: *OnlineSecurity*, *OnlineBackup*, *DeviceProtection* and *TechSupport*. The add-ons have a third category, "No internet service", which applies to the 776 customers (19.4%) without internet.
-
-We randomly split the data (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` customers (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**. Churn rates are almost identical in the two sets (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). A naive model that predicts "no churn" for everyone would be `r pct(base)` accurate on the test set; any useful model must beat this baseline.
+For each customer we observe *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn.rate)` churned) and twelve predictors without missing values: contract term (*Contract*; 59.7% month-to-month), *tenure* (1--72 months), *MonthlyCharges* (\$18--\$119), *TotalCharges*, *Partner*, *PhoneService*, *MultipleLines*, *InternetService* (DSL, fibre optic or none) and four add-ons (*OnlineSecurity*, *OnlineBackup*, *DeviceProtection*, *TechSupport*), which take the value "No internet service" for the 19.4% of customers without internet. We randomly split the data (seed 123) into a **training set of `r format(nrow(train), big.mark = ",")` (70%)** and a **test set of `r format(nrow(test), big.mark = ",")` customers (30%)**, with similar churn rates (`r pct(mean(train$Churn == "Yes"))` and `r pct(mean(test$Churn == "Yes"))`). Always predicting "no churn" gives a baseline test accuracy of `r pct(base)`.
 
 # 3. Methods
 
-**Decision trees.** A classification tree divides customers into groups by asking a series of yes/no questions about their attributes, such as "Is the contract month-to-month?" (Tan et al., 2014). Each final group, called a *leaf*, predicts the majority class of the training customers in it. The share of churners in a leaf serves as an estimated churn probability.
+**Decision trees.** A classification tree splits customers into groups by asking a sequence of yes/no questions about their attributes (e.g. "Is the contract month-to-month?"). Each final group (*leaf*) predicts its majority class, and its share of churners is an estimated churn probability (Tan et al., 2014). We fit the tree with the CART algorithm (Breiman et al., 1984) in the R package `rpart` (Therneau & Atkinson, 2023). The tree is grown top-down by *recursive binary splitting*: at each node every predictor and cut-point (or grouping of categories) is tried, and the split that most reduces the Gini impurity $G = 1 - \sum_k \hat p_k^2$ is chosen (James et al., 2013). This search is greedy, i.e. a split is never revised later.
 
-**How the tree is fitted.** We use the CART algorithm (Breiman et al., 1984) as implemented in the R package `rpart` (Therneau & Atkinson, 2023). The tree is grown top-down by *recursive binary splitting*. At each node the algorithm tries every predictor and every possible cut-point (or grouping of categories). It then picks the split that most reduces node impurity, measured by the Gini index $G = 1 - \sum_k \hat p_k^2$, which is 0 when a node holds only one class (James et al., 2013). The search is *greedy*: each split is the best one at that step, and earlier splits are never revised.
+**The complexity parameter.** A fully grown tree fits noise in the training data and generalises poorly (overfitting). CART therefore prunes the tree by minimising $R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_{\text{root}})$, where $R(T)$ is the training misclassification error, $|T|$ the number of leaves and $R(T_{\text{root}})$ the error without splits. The **complexity parameter** $cp$ is the price of an extra leaf: a split is kept only if it lowers the relative error by at least $cp$. $cp = 0$ gives the full tree; larger values give smaller trees.
 
-**The complexity parameter.** A fully grown tree fits noise in the training data and therefore generalises poorly (overfitting). CART controls this with *cost-complexity pruning*. For a tree $T$ with $|T|$ leaves, `rpart` minimises
-$$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_{\text{root}}),$$
-where $R(T)$ is the training misclassification error and $R(T_{\text{root}})$ the error of the tree without splits. The **complexity parameter** $cp$ is the price paid per additional leaf: a split is kept only if it reduces the relative error by at least $cp$. $cp = 0$ keeps the full tree, and larger values give smaller trees.
-
-**Tuning cp.** We first grow the full tree ($cp = 0$) on the training set. `rpart` then runs a **10-fold cross-validation**: for each candidate $cp$, the tree is fitted on nine tenths of the training data and evaluated on the remaining tenth. This gives an estimate of the out-of-sample error (*xerror*) and its standard error (*xstd*). We select $cp$ with the **one-standard-error (1-SE) rule**: the simplest tree whose xerror lies within one standard error of the minimum (Breiman et al., 1984; Hastie et al., 2009). This favours an interpretable tree whose expected accuracy is statistically indistinguishable from the best tree's. The pruned tree then predicts churn for the test customers: a customer counts as a churner when the leaf's churn probability exceeds 0.5. We report accuracy, sensitivity (the share of churners detected) and specificity.
+**Tuning.** We grow the full tree ($cp = 0$) and let `rpart` estimate the out-of-sample error of every pruned subtree with **10-fold cross-validation** (*xerror*, with standard error *xstd*). We choose $cp$ with the **one-standard-error (1-SE) rule**: the simplest tree whose xerror is within one standard error of the minimum (Hastie et al., 2009). This yields a more interpretable tree whose accuracy is statistically indistinguishable from the best one. Test customers are classified as churners if their leaf's churn probability exceeds 0.5.
 
 # 4. Results
 
-**Tuning.** The full tree has `r max(cpt[, "nsplit"])` splits and a cross-validated relative error of `r sprintf("%.3f", cpt[nrow(cpt), "xerror"])`. Pruning lowers this error to a minimum of `r sprintf("%.3f", best["xerror"])` at `r best["nsplit"]` splits ($cp$ = `r sprintf("%.4f", best["CP"])`); beyond that point extra splits only fit noise (Appendix A, Table A1). The 1-SE rule selects the simplest tree with xerror below `r sprintf("%.3f", best["xerror"] + best["xstd"])`. This tree has **`r cpt[row1se, "nsplit"]` splits and `r cpt[row1se, "nsplit"] + 1` leaves** ($cp$ = `r sprintf("%.4f", cp.1se)`, xerror `r sprintf("%.3f", cpt[row1se, "xerror"])`). Figure 1 shows the tree we interpret.
+**Tuning.** The full tree has `r max(cpt[, "nsplit"])` splits and a cross-validated relative error of `r sprintf("%.3f", cpt[nrow(cpt), "xerror"])`. The error is lowest (`r sprintf("%.3f", best["xerror"])`) at `r best["nsplit"]` splits; larger trees fit noise (Appendix A, Table A1). The 1-SE rule selects $cp$ = `r sprintf("%.4f", cp.1se)`: a tree with **`r cpt[row1se, "nsplit"]` splits and `r cpt[row1se, "nsplit"] + 1` leaves** (xerror `r sprintf("%.3f", cpt[row1se, "xerror"])`, Figure 1).
 
-```{r tree-plot, fig.width=8, fig.height=4.2, out.width="95%", fig.cap="Pruned classification tree. Each node shows the predicted class, the churn probability and the share of training customers."}
+```{r tree-plot, fig.width=8, fig.height=3.4, out.width="100%", fig.cap="Pruned tree. Each node shows the predicted class, the churn probability and the share of training customers."}
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 ```
 
-**Interpretation.** *Contract* is the root split and the most important variable (`r imp["Contract"]`% of total importance). It is followed by *tenure* (`r imp["tenure"]`%), *TotalCharges* (`r imp["TotalCharges"]`%), *TechSupport* (`r imp["TechSupport"]`%) and *OnlineSecurity* (`r imp["OnlineSecurity"]`%). The tree yields four clear rules:
+**Interpretation.** *Contract* is the root split and the most important variable (`r imp["Contract"]`% of importance), followed by *tenure* (`r imp["tenure"]`%), *TotalCharges* (`r imp["TotalCharges"]`%), *TechSupport* (`r imp["TechSupport"]`%) and *OnlineSecurity* (`r imp["OnlineSecurity"]`%). The main rules are:
 
-1. **Customers on a one- or two-year contract rarely churn.** This is 41% of training customers, and only 11% of them churned. The tree does not split this group further.
-2. **Month-to-month customers with fibre-optic internet and less than 17 months' tenure form the highest-risk group.** This leaf holds 19% of customers, of whom 82% churned.
-3. **Longer-tenure fibre customers churn when they lack add-ons.** Among fibre customers with at least 17 months' tenure, churn falls to 35% with online security. Without online security, those paying at least \$74.28 per month churn at 59% when they have no tech support, against 41% when they do.
-4. **DSL customers and those without internet are safer, except new customers without online security.** Customers in this group with at least 6 months' tenure churn at 29%. New customers (under 6 months) without online security churn at 64%.
+1. **One- or two-year contracts:** 41% of customers, only 11% churn.
+2. **Month-to-month, fibre optic, tenure under 17 months:** the highest-risk group (19% of customers, 82% churn).
+3. **Month-to-month fibre customers with longer tenure** churn at 35% with online security. Without it, those paying at least \$74.28 per month churn at 59% without tech support, against 41% with it.
+4. **Month-to-month DSL or no internet:** 29% churn after 6 months' tenure, but 64% for newer customers without online security.
 
-**Test-set performance.** On the `r format(nrow(test), big.mark = ",")` test customers the pruned tree reaches **`r pct(acc)` accuracy**, well above the `r pct(base)` baseline. The training accuracy is `r pct(acc.train)`, close to the test accuracy, so the tree generalises well. The unpruned tree scores only `r pct(acc.full)` on the test set: pruning removes overfitting rather than costing accuracy.
-
-```{r cm}
-knitr::kable(matrix(cm, 2, dimnames = list(c("Predicted: no churn", "Predicted: churn"),
-                                           c("Actual: no churn", "Actual: churn"))),
-             caption = "Confusion matrix on the test set.")
-```
-
-The tree identifies **`r pct(sens)`** of actual churners (sensitivity) and correctly clears **`r pct(spec)`** of non-churners (specificity). Of the customers it flags, `r pct(cm["Yes", "Yes"] / sum(cm["Yes", ]))` actually churned (precision).
+**Test-set performance.** The pruned tree classifies **`r pct(acc)`** of the `r format(nrow(test), big.mark = ",")` test customers correctly, against the `r pct(base)` baseline. Its training accuracy (`r pct(acc.train)`) is similar, so it generalises well, while the unpruned tree reaches only `r pct(acc.full)`. It detects **`r pct(sens)`** of churners (sensitivity; `r cm["Yes", "Yes"]` of `r sum(cm[, "Yes"])`) and correctly clears **`r pct(spec)`** of non-churners (specificity; `r cm["No", "No"]` of `r sum(cm[, "No"])`). Of the `r sum(cm["Yes", ])` customers it flags, `r pct(cm["Yes", "Yes"] / sum(cm["Yes", ]))` actually churn.
 
 # 5. Conclusions and Discussion
 
-A pruned classification tree with nine leaves predicts churn for unseen customers with `r pct(acc)` accuracy, against a `r pct(base)` baseline. It is markedly more accurate than the unpruned tree. Its rules show that churn is driven mainly by **commitment** (contract type), **customer lifetime** (tenure) and the **service bundle** (internet type and the online security and tech support add-ons). This suggests three actions for the provider:
+A pruned nine-leaf tree predicts churn of unseen customers with `r pct(acc)` accuracy (baseline `r pct(base)`). Churn is driven mainly by **commitment** (contract), **customer lifetime** (tenure) and the **service bundle** (fibre internet, online security and tech support). This suggests three actions: (1) encourage month-to-month customers (56% churn) to move to longer contracts (11%); (2) prioritise new fibre-optic customers (82% churn) with onboarding support and a review of fibre pricing and quality; and (3) offer online security and tech support at a discount, as customers with these add-ons churn less.
 
-1. **Move customers to longer contracts.** Customers on one- or two-year contracts churn at 11%, against 56% for month-to-month customers. Discounts for switching away from month-to-month are the most promising lever.
-2. **Focus on new fibre-optic customers.** Month-to-month fibre customers in their first 16 months churn at 82%. Onboarding support and a review of fibre pricing and service quality should come first.
-3. **Bundle online security and tech support.** Customers with these add-ons churn noticeably less, both among new DSL customers and among longer-tenure fibre customers. Offering the add-ons free or at a discount may improve retention.
-
-**Limitations.** First, the tree misses about `r pct(1 - sens)` of churners. Lowering the 0.5 probability cut-off would catch more of them, at the cost of more false alarms. Second, single trees are unstable: a different random split could give a somewhat different tree, so exact cut-points (e.g. 16.5 months) are approximate. Third, the results are associations, not causes: customers who buy add-ons may simply be more engaged. A controlled retention campaign would test whether the suggested actions actually reduce churn.
+**Limitations.** The tree misses `r pct(1 - sens)` of churners; a lower probability cut-off would catch more at the cost of more false alarms. Single trees are unstable, so the exact cut-points (e.g. 16.5 months) are approximate. Finally, the rules show associations, not causes; a controlled retention campaign should test whether the proposed actions actually reduce churn.
 
 # References
 
@@ -159,20 +136,22 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 
 # Appendix A: Tables
 
+**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp.1se)` (8 splits).
+
 ```{r cptable}
 keep <- cpt[, "nsplit"] %in% c(0:4, 6, 8, 10, 20, best["nsplit"], max(cpt[, "nsplit"]))
 tab  <- data.frame(cp = sprintf("%.4f", cpt[keep, "CP"]), Splits = cpt[keep, "nsplit"],
                    Leaves = cpt[keep, "nsplit"] + 1,
                    round(cpt[keep, c("rel error", "xerror", "xstd")], 3))
 names(tab)[4:6] <- c("Training error", "CV error", "CV std. error")
-knitr::kable(tab, row.names = FALSE, caption = paste0(
-  "Table A1. Cost-complexity table of the full tree (selected rows, 10-fold CV). ",
-  "Errors are relative to the root-node error; the 1-SE rule selects cp = ",
-  sprintf("%.4f", cp.1se), "."))
+knitr::kable(tab, row.names = FALSE)
 ```
 
+**Table A2.** Relative variable importance in the pruned tree (% of total; includes surrogate splits).
+
 ```{r importance}
-knitr::kable(t(imp), caption = "Table A2. Relative variable importance in the pruned tree (% of total; includes surrogate splits).")
+knitr::kable(data.frame(Variable = names(imp), `Importance (%)` = imp, check.names = FALSE),
+             row.names = FALSE)
 ```
 
 \newpage
@@ -185,7 +164,7 @@ The code below produces every number, table and figure in this report (R 4.3.3, 
 ```
 
 ```{r echo=TRUE, eval=FALSE}
-# 7. Figure 1 and Table 1: plot the pruned tree and print the confusion matrix
+# 7. Figure 1 and test-set results: plot the pruned tree, print the confusion matrix
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 cm; c(accuracy = acc, sensitivity = sens, specificity = spec, baseline = base)
