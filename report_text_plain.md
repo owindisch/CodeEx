@@ -4,7 +4,7 @@ Since acquiring a new customer costs more than retaining an existing one, and cu
 
 # 2. Data
 
-The data were provided by a telecom provider and contain 4,000 customers, of whom 37.5% left the company (*Churn*). Twelve characteristics are recorded without missing values: the contract term (*Contract*; 59.7% month-to-month), months with the company (*tenure*; median 25.5), the monthly and total amount charged (*MonthlyCharges*, median \$73; *TotalCharges*), whether the customer has a partner, phone service or multiple lines, the internet provider (*InternetService*: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: 56.0% of month-to-month customers churned against 4.5% of two-year customers, and 54.6% of fibre customers against 27.7% of DSL customers.
+The data were provided by a telecom provider and contain 4,000 customers. For each customer, the data contain *Churn* (yes/no; 1,500 customers or 37.5% churned) and twelve predictors without missing values: the contract term (*Contract*; 59.7% month-to-month), months with the company (*tenure*; median 25.5), the monthly and total amount charged (*MonthlyCharges*, median \$73; *TotalCharges*), whether the customer has a partner, phone service or multiple lines, the internet provider (*InternetService*: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: 56.0% of month-to-month customers churned against 4.5% of two-year customers, and 54.6% of fibre customers against 27.7% of DSL customers. The data are randomly split into a training set of 2,800 (70%) and a test set of 1,200 customers (30%), stratified by *Churn* so that both sets have exactly the same churn rate of 37.5%. Always predicting "no churn" therefore gives a baseline accuracy of 62.5%.
 
 # 3. Methods
 
@@ -16,7 +16,7 @@ and $\hat p_{mk}$ is the proportion of training observations in node $m$ of clas
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
 where $R(T)$ is the share of misclassified training observations, $|T|$ the number of leaves of $T$, $R(T_0)$ the misclassification rate of the tree without splits, and $cp \geq 0$ the **complexity parameter**. A split is kept only if it lowers the relative error by at least $cp$, so a larger $cp$ gives a smaller tree.
 
-The data are split into a stratified training (70%) and test set (30%). On the training set, $cp$ is chosen by **10-fold cross-validation**: the tree is fitted on nine tenths of the data and tested on the remaining tenth, giving a *cross-validated error* and its standard error; lower is better. The **one-standard-error rule** picks the smallest tree within one standard error of the minimum (Hastie et al., 2009). On the test set, higher **accuracy** (share of correct predictions), **sensitivity** (share of actual positives predicted positive) and **specificity** (share of actual negatives predicted negative) are better, and accuracy should clearly exceed the **baseline** of always predicting the most common class. The **variable importance** of a predictor is its share of the total Gini reduction over all (including surrogate) splits; higher means more influential.
+After a stratified split into a training and a test set, $cp$ is chosen on the training set by **10-fold cross-validation**: the tree is fitted on nine tenths of the data and tested on the remaining tenth, giving a *cross-validated error* and its standard error; lower is better. The **one-standard-error rule** picks the smallest tree within one standard error of the minimum (Hastie et al., 2009). On the test set, higher **accuracy** (share of correct predictions), **sensitivity** (share of actual positives predicted positive) and **specificity** (share of actual negatives predicted negative) are better, and accuracy should clearly exceed the **baseline** of always predicting the most common class. The **variable importance** of a predictor is its share of the total Gini reduction over all (including surrogate) splits; higher means more influential.
 
 # 4. Results
 
@@ -32,7 +32,7 @@ On the 1,200 test customers, the tree predicts 76.5% correctly, well above the 6
 
 Churn mainly depends on how strongly customers are tied to the provider: their contract, tenure, and internet service and its price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts for a one- or two-year contract, review its most expensive fibre plans, and encourage new DSL customers to use extra services such as online backup.
 
-The analysis could be improved: a lower probability cut-off would find more of the 34.9% missed churners, a random forest would be more stable than one tree, and data on satisfaction or competitor prices could help to explain the causes of churn.
+The analysis could be improved: a lower probability cut-off would find more of the 34.9% missed churners, a random forest would be more stable, and data on satisfaction or competitor prices could reveal causes.
 
 # References
 
