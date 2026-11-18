@@ -8,19 +8,19 @@ The data were provided by a telecom provider and contain 4,000 customers. For ea
 
 # 3. Methods
 
-To identify which characteristics are related to churn, a decision tree is used. Since churn is categorical, CART (Classification And Regression Trees; Breiman et al., 1984) builds a *classification tree*, which predicts the outcome through a series of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups; the final groups (*leaves*) predict their most common class, giving easy-to-read if-then rules (James et al., 2013). Formally, each observation has a response $Y$ in one of $K$ classes and $p$ predictors $X_1, \dots, X_p$. The tree is built in five steps.
+To identify which characteristics are related to churn, a decision tree is used. Since churn is categorical, CART (Classification And Regression Trees; Breiman et al., 1984) builds a *classification tree*, which predicts the outcome through a series of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups; the final groups (*leaves*) predict their most common class, giving easy-to-read if-then rules (Yildirim & Kübler, 2023). Formally, each observation has a response $Y$ in one of $K$ classes and $p$ predictors $X_1, \dots, X_p$. The tree is built in five steps.
 
-*First*, the tree is grown on a training set by *recursive binary splitting*. At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
+*First*, the tree is grown on a training set by *recursive binary splitting* (James et al., 2013; Tan et al., 2014). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
 and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. $G_m = 0$ for a pure node, and $\hat p_{mk}$ is the predicted probability of class $k$.
 
-*Second*, as a fully grown tree also fits noise (overfitting), it is *pruned* to the subtree $T$ that minimises
+*Second*, as a fully grown tree also fits noise (overfitting; Tan et al., 2014), it is *pruned* (Therneau & Atkinson, 2023) to the subtree $T$ that minimises
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
 where $R(T)$ is the share of misclassified training observations, $|T|$ the number of leaves of $T$, $R(T_0)$ the misclassification rate of the tree without splits, and $cp \geq 0$ the **complexity parameter**. A split is only kept if it lowers the relative error by at least $cp$, so a larger $cp$ gives a smaller tree.
 
-*Third*, $cp$ is chosen by **$K_f$-fold cross-validation**: the training set is divided into $K_f$ parts, and the tree is fitted on $K_f - 1$ parts and tested on the remaining part, each part in turn. This gives a *cross-validated error* with its standard error; lower is better. The **one-standard-error rule** selects the smallest tree whose cross-validated error lies within one standard error of the minimum (Hastie et al., 2009).
+*Third*, $cp$ is chosen by **$K_f$-fold cross-validation** (James et al., 2013): the training set is divided into $K_f$ parts, and the tree is fitted on $K_f - 1$ parts and tested on the remaining one, in turn. This gives a *cross-validated error* with its standard error; lower is better. The **one-standard-error rule** selects the smallest tree whose error is within one standard error of the minimum (Hastie et al., 2009).
 
-*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **precision** $P$ (share of predicted positives that are actually positive), **recall** $R$ (share of actual positives that are detected) and **F1 score** $F_1 = 2PR/(P+R)$. Higher is better; accuracy should clearly exceed the **baseline accuracy** of always predicting the most common class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction (incl. surrogate splits); higher means more influential.
+*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **precision** $P$ (share of predicted positives that are correct), **recall** $R$ (share of actual positives detected) and **F1 score** $F_1 = 2PR/(P+R)$ (Tan et al., 2014). Higher is better; accuracy should clearly exceed the **baseline accuracy** of always predicting the majority class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction (incl. surrogate splits); higher is more influential (de Oña et al., 2016).
 
 # 4. Results
 
@@ -34,11 +34,13 @@ On the 1,200 test customers, the tree is 76.5% accurate (training: 78.0%; unprun
 
 # 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, and internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, review its most expensive fibre plans, and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
+Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, and internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
 
 # References
 
 Breiman, L., Friedman, J. H., Olshen, R. A., & Stone, C. J. (1984). *Classification and regression trees*. Wadsworth.
+
+de Oña, J., de Oña, R., & López, G. (2016). Transit service quality analysis using cluster analysis and decision trees: A step forward to personalized marketing in public transportation. *Transportation, 43*(5), 725--747. https://doi.org/10.1007/s11116-015-9615-0
 
 Gupta, S., Hanssens, D., Hardie, B., Kahn, W., Kumar, V., Lin, N., Ravishanker, N., & Sriram, S. (2006). Modeling customer lifetime value. *Journal of Service Research, 9*(2), 139--155. https://doi.org/10.1177/1094670506293810
 
