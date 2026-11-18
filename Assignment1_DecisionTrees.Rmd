@@ -111,22 +111,9 @@ where $R(T)$ is the share of misclassified training observations, $|T|$ the numb
 
 # 4. Results
 
-**Table 1.** Cross-validation results per number of splits (errors relative to the tree without splits). The error is lowest at `r row_min["nsplit"]` splits; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (`r cp_table[row_1se, "nsplit"]` splits, `r cp_table[row_1se, "nsplit"] + 1` leaves; Figure 1).
+The full tree has `r max(cp_table[, "nsplit"])` splits; the cross-validated error is lowest (`r sprintf("%.3f", row_min["xerror"])`) at `r row_min["nsplit"]` splits. The one-standard-error rule selects $cp$ = `r sprintf("%.4f", cp_1se)`, a tree with `r cp_table[row_1se, "nsplit"]` splits and `r cp_table[row_1se, "nsplit"] + 1` leaves (Figure 1).
 
-```{r cp table, results="asis"}
-cp_rows <- cp_table[, "nsplit"] %in%
-  c(0, 1, 2, 4, cp_table[row_1se, "nsplit"], row_min["nsplit"], max(cp_table[, "nsplit"]))
-cp_summary <- data.frame(Splits = c("cp", "CV error", "CV std. error"),
-                         rbind(sprintf("%.4f", cp_table[cp_rows, "CP"]),
-                               sprintf("%.3f", cp_table[cp_rows, "xerror"]),
-                               sprintf("%.3f", cp_table[cp_rows, "xstd"])))
-names(cp_summary)[-1] <- cp_table[cp_rows, "nsplit"]   # one column per subtree size
-cat("\\begingroup\\small\n")
-cat(knitr::kable(cp_summary, format = "latex", booktabs = TRUE, row.names = FALSE))
-cat("\n\\endgroup\n")
-```
-
-```{r tree plot, fig.width=8, fig.height=1.9, out.width="100%", fig.cap="Pruned tree (per node: predicted class, churn probability, share of training customers)."}
+```{r tree plot, fig.width=8, fig.height=2.4, out.width="100%", fig.cap="Pruned tree (per node: predicted class, churn probability, share of training customers)."}
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 ```
@@ -257,17 +244,7 @@ pct <- function(x) sprintf("%.1f%%", 100 * x) # for easier writing in text secti
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 
-# 9. Table 1: cross-validation results for selected subtrees
-cp_rows <- cp_table[, "nsplit"] %in%
-  c(0, 1, 2, 4, cp_table[row_1se, "nsplit"], row_min["nsplit"], max(cp_table[, "nsplit"]))
-cp_summary <- data.frame(Splits = c("cp", "CV error", "CV std. error"),
-                         rbind(sprintf("%.4f", cp_table[cp_rows, "CP"]),
-                               sprintf("%.3f", cp_table[cp_rows, "xerror"]),
-                               sprintf("%.3f", cp_table[cp_rows, "xstd"])))
-names(cp_summary)[-1] <- cp_table[cp_rows, "nsplit"]   # one column per subtree size
-knitr::kable(cp_summary, format = "latex", booktabs = TRUE, row.names = FALSE)
-
-# 10. Appendix A, Table A1: variable importance
+# 9. Appendix A, Table A1: variable importance
 knitr::kable(data.frame(Variable = names(var_importance),
                         `Importance (%)` = var_importance, check.names = FALSE),
              format = "latex", booktabs = TRUE, row.names = FALSE)

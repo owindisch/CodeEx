@@ -24,17 +24,7 @@ Fourth, the selected tree is evaluated on a separate test set by its accuracy (s
 
 4. Results
 
-Table 1. Cross-validation results per number of splits (errors relative to the tree without splits). The error is lowest at 15 splits; the 1-SE rule selects cp = 0.0076 (8 splits, 9 leaves; Figure 1).
-
-  ------------------------------------------------------------------------------
-  Splits          0        1        2        4        8        15       94
-  --------------- -------- -------- -------- -------- -------- -------- --------
-  cp              0.1714   0.1543   0.0205   0.0105   0.0076   0.0029   0.0000
-
-  CV error        1.000    0.913    0.674    0.646    0.637    0.622    0.720
-
-  CV std. error   0.024    0.024    0.022    0.022    0.021    0.021    0.022
-  ------------------------------------------------------------------------------
+The full tree has 94 splits; the cross-validated error is lowest (0.622) at 15 splits. The one-standard-error rule selects cp = 0.0076, a tree with 8 splits and 9 leaves (Figure 1).
 
 [Figure 1: pruned tree (per node: predicted class, churn probability, share of training customers)]
 
