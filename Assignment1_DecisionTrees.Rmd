@@ -97,9 +97,9 @@ The data were provided by a telecom provider and contain `r format(nrow(data), b
 
 To identify which characteristics are related to churn, a decision tree is used. Since churn is categorical, CART (Classification And Regression Trees; Breiman et al., 1984) builds a *classification tree*, which predicts the outcome through a series of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups; the final groups (*leaves*) predict their most common class, giving easy-to-read if-then rules (Yildirim & Kübler, 2023). Formally, each observation has a response $Y$ in one of $K$ classes and $p$ predictors $X_1, \dots, X_p$. The tree is built in five steps.
 
-*First*, the tree is grown on a training set by *recursive binary splitting* (James et al., 2013; Tan et al., 2014). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
+*First*, the tree is grown on a training set by *recursive binary splitting* (James et al., 2013; Tan et al., 2014). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried. Each candidate splits the node into $\{X_j < s\}$ and $\{X_j \geq s\}$. The split with the lowest weighted Gini impurity of the two new nodes is chosen, where
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
-and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. $G_m = 0$ for a pure node, and $\hat p_{mk}$ is the predicted probability of class $k$.
+and $\hat p_{mk}$ is the share of training observations in node $m$ that belong to class $k$. A pure node has $G_m = 0$. In a leaf, $\hat p_{mk}$ is the predicted probability of class $k$.
 
 *Second*, as a fully grown tree also fits noise (overfitting; Tan et al., 2014), it is *pruned* (Therneau & Atkinson, 2023) to the subtree $T$ that minimises
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
