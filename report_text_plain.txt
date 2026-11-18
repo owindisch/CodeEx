@@ -34,7 +34,7 @@ On the 1,200 test customers, the tree predicts churn correctly in 76.5% of cases
 
 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, internet service and price. A long contract makes switching harder, new fibre customers pay for the priciest service without having built up loyalty, and customers with extra services such as online backup seem more attached. The provider should therefore target month-to-month customers in their first year, especially fibre customers (e.g. discounts on longer contracts), and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
+This report asked which customer characteristics are related to churn and which customers to target. Churn mainly depends on how strongly customers are tied to the provider through contract length, tenure, internet service and price. Customers with a long contract rarely churn, as switching is harder. New fibre customers churn most often. They pay for the most expensive service but are not yet loyal. Customers with extra services, such as online backup, seem more attached. The provider should therefore target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, and promote extra services to new DSL customers. To improve the analysis, a lower cut-off could catch more of the 34.9% missed churners, and satisfaction data could explain why customers leave.
 
 References
 
