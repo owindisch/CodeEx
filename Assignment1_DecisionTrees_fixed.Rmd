@@ -1,0 +1,194 @@
+---
+title: "Week 4, Case A: Churning Behavior of Telecom Customers (Decision Trees)"
+author: Olivia Windisch
+date: "November, 2026"
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{makecell}
+  - \usepackage{listings}
+  - \usepackage{float}
+  - \usepackage{titling}
+  - \setlength{\droptitle}{-2.5cm}
+  - \usepackage{titlesec}
+  - \titlespacing*{\section}{0pt}{1.6ex plus 0.5ex}{0.8ex}
+  - \setlength{\intextsep}{4pt}
+output:
+  pdf_document:
+    latex_engine: xelatex
+    fig_crop: false
+subtitle: FEM11152 – Data Science for Marketing Analytics
+fontsize: 11pt
+geometry: "hmargin=2cm, vmargin=1.7cm"
+editor_options:
+  chunk_output_type: inline
+urlcolor: blue
+linkcolor: red
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.align = "center", fig.pos = "H")
+
+```
+```{r data, include=FALSE}
+library(rpart); library(rpart.plot)
+setwd("C:/Users/Gebruiker/OneDrive - Erasmus University Rotterdam/Seminar DSMA/Decision Trees and Ensembles")
+load("Churn.RData")
+str(data)
+summary(data)
+churn_rate <- mean(data$Churn == "Yes")
+```
+```{r data split, include=FALSE}
+set.seed(123)
+train_rows <- unlist(lapply(split(seq_len(nrow(data)), data$Churn),
+                            function(rows) sample(rows, round(0.7 * length(rows)))))
+train <- data[train_rows, ]
+test  <- data[-train_rows, ]
+```
+```{r grow tree, include=FALSE}
+full <- rpart(Churn ~ ., data = train, method = "class",
+              control = rpart.control(cp = 0, xval = 10))
+rpart.plot(full)
+```
+```{r tune tree, include=FALSE}
+cp_table <- full$cptable
+row_min <- cp_table[which.min(cp_table[, "xerror"]), ]
+row_1se <- which(cp_table[, "xerror"] <= row_min["xerror"] + row_min["xstd"])[1]
+cp_1se <- cp_table[row_1se, "CP"]
+```
+```{r prune tree, include=FALSE}
+tree <- prune(full, cp = cp_1se)
+var_importance <- round(100 * tree$variable.importance / sum(tree$variable.importance), 1)
+```
+```{r predictions test set, include=FALSE}
+test_pred <- predict(tree, test, type = "class")
+
+conf_matrix <- table(Predicted = test_pred, Actual = test$Churn)
+acc_test <- mean(test_pred == test$Churn)
+acc_baseline <- mean(test$Churn == "No")
+acc_train <- mean(predict(tree, train, type = "class") == train$Churn)
+acc_full <- mean(predict(full, test, type = "class") == test$Churn)
+conf_matrix; acc_test; acc_baseline; acc_train; acc_full
+
+precision <- conf_matrix["Yes", "Yes"] / sum(conf_matrix["Yes", ])
+recall <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"])
+precision; recall
+
+f1 <- 2*precision*recall / (precision+recall)
+f1
+```
+
+# 1. Introduction
+
+Since acquiring a new customer costs more than retaining an existing one and customers become more profitable the longer they stay (Gupta et al., 2006), it is in a company's best interest to minimize customer churn, i.e. customers ending their contract and switching to a competitor. This report therefore investigates the churn behavior of a telecom provider's customers to gain insight into the factors that play a role in their decision to leave. It aims to answer the question: *Which customer characteristics are related to churn, and which customers should the telecom provider target to reduce it?*
+
+# 2. Data
+
+The data were provided by a telecom provider and contain 4,000 customers. For each customer, the data contain *Churn* (yes/no, 1,500 customers or 37.5% churned) and twelve predictors without missing values: the contract term, months with the company, the monthly and total amount charged, whether the customer has a partner, phone service or multiple lines, the internet provider and four add-ons (online security, online backup, device protection and tech support). The data are randomly split into a training set of 2,800 (70%) and a test set of 1,200 customers (30%), stratified by *Churn* so both sets have exactly the same churn rate of 37.5%. Always predicting "no churn" gives a baseline accuracy of 62.5%.
+
+
+# 3. Methods
+
+In order to identify which characteristics are related to churn, a *classification tree* is used. It predicts a categorical outcome by asking a sequence of yes/no questions such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups. The final groups, also known as *leaves*, predict their most common class. This method gives easy-to-read if/then rules (Yildirim & Kübler, 2023). Let $Y$ be a categorical response with $K$ classes and $p$ predictors $X_1, \dots, X_p$. The tree is built in four steps.
+
+First, the tree is grown on the training set by *recursive binary splitting* (James et al., 2013; Tan et al., 2013). At each node $m$, every predictor $X_j$ and cut point $s$ is tried. Each candidate splits the node into $\{X_j < s\}$ and $\{X_j \geq s\}$. The split with the lowest weighted Gini impurity of the two new nodes is chosen, where $G_m = 1 - \sum_{k=1}^{K}\hat p_{mk}^2$ and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. A pure node has $G_m = 0$. In a leaf, $\hat p_{mk}$ is the predicted probability of class $k$.
+
+Because a fully grown tree also fits noise and this often leads to overfitting, it is *pruned* (Tan et al., 2013) in the second step. In `rpart`, the pruned tree is the subtree $T$ that minimizes $R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0)$, where $R(T)$ is the share of misclassified training observations, $|T|$ is the number of leaves of $T$, $R(T_0)$ is the misclassification rate of the tree without splits, and $cp \geq 0$ is the *complexity parameter*. A split is only kept if it lowers the relative error by at least $cp$. A larger $cp$ gives a smaller tree.
+
+In the third step, $cp$ is chosen by *10-fold cross-validation* (James et al., 2013). The training set is divided into 10 parts and the tree is fitted on 9 parts. It is then tested on the remaining part, in turn. This gives a cross-validated error with its standard error (SE). A lower error is seen as better. The *1-SE rule* selects the smallest tree whose error is within one SE of the minimum (Hastie et al., 2009).
+
+Last, the selected tree is evaluated on a separate test set by its *accuracy* (share of correct predictions), *precision* $P$ (share of predicted positives that are correct), *recall* $R$ (share of actual positives detected) and *F1 score* $F_1 = 2PR / (P+R)$ (Tan et al., 2013). Higher scores are seen as better, but accuracy should also always exceed the baseline accuracy. Moreover, the predictors' *variable importance* is calculated. This is a predictor's share of the total Gini reduction. A higher score shows a higher importance (de Oña et al., 2016).
+
+
+# 4. Results
+
+The full tree has 94 splits, but the cross-validated error is lowest (0.622) at 15 splits. The 1-SE rule selects $cp$ = 0.0076, a tree with 8 splits and 9 leaves (Figure 1).
+
+```{r tree plot, fig.width=8, fig.height=2.4, out.width="100%", fig.cap="Pruned Classification Tree (per node: predicted class, churn probability, share of training customers)."}
+rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd", fallen.leaves = TRUE, cex = 0.7)
+
+```
+The tree first splits on contract type. This is the most important variable (23.3% of importance), followed by tenure (17.6%) and total charges (12.5%). Customers with a contract of at least one year (40% of all customers) are fairly "safe": only 10% of them churn. Month-to-month customers (60% of all customers) are much more likely to leave: 55% of them churn. Within this group, the type of internet matters most. Month-to-month fiber-optic customers (35% of all customers) churn at 67%. Those with less than 16 months' tenure are the riskiest group (18% of all customers): 81% of them churn. Among fiber customers who stay longer, price matters: 62% of those paying at least \$96 a month churn. Month-to-month customers with DSL or no internet (25% of all customers) churn at 38% and tenure matters most: after six months, only 28% churn. Of newer customers without online backup, 63% churn.
+
+On the 1,200 test customers, the tree predicts churn correctly in 76.5% of cases. This is above the 62.5% baseline and close to the 78.0% on the training data, so the tree is not overfitting. The unpruned tree only reaches 74.0%. Of the customers the tree flags as churners, 70.1% actually leave (precision). It finds 65.1% of all churners (recall). It gives an overall F1 score of 0.68.
+
+# 5. Conclusions and Discussion
+
+The report asked which customer characteristics are related to churn and which customers to target. Churn mainly depends on how strongly customers are tied to the telecom provider through contract length, tenure, internet service and price. Customers with a long contract rarely churn, while new fiber customers churn more often. They pay for the most expensive service, but are not yet loyal to this provider. Customers with extra services, such as online backup, seem more attached.
+
+The provider should therefore target month-to-month customers in their first year, especially fiber customers, for example with discounts on longer contracts. It also seems useful to promote extra services to new DSL customers.
+
+# References
+
+de Oña, J., de Oña, R., & López, G. (2016). Transit service quality analysis using cluster analysis and decision trees: A step forward to personalized marketing in public transportation. *Transportation, 43*(5), 725–747. https://doi.org/10.1007/s11116-015-9615-0
+
+Gupta, S., Hanssens, D., Hardie, B., Kahn, W., Kumar, V., Lin, N., Ravishanker, N., & Sriram, S. (2006). Modeling customer lifetime value. *Journal of Service Research, 9*(2), 139–155. https://doi.org/10.1177/1094670506293810
+
+Hastie, T., Tibshirani, R., & Friedman, J. (2009). *The elements of statistical learning* (2nd ed.). Springer. https://doi.org/10.1007/978-0-387-84858-7
+
+James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An introduction to statistical learning*. Springer. https://doi.org/10.1007/978-1-4614-7138-7
+
+Tan, P.-N., Steinbach, M., & Kumar, V. (2013). *Introduction to data mining* (Pearson new international ed.). Pearson.
+
+Yildirim, G., & Kübler, R. (2023). *Applied marketing analytics using R*. SAGE Publications.
+
+
+\newpage
+
+# Appendix B (Code)
+
+\begingroup
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+\begin{lstlisting}[
+basicstyle=\ttfamily\fontsize{7}{8}\selectfont,
+columns=fullflexible,
+breaklines=true,
+keepspaces=true,
+showstringspaces=false,
+frame=none
+]
+library(rpart); library(rpart.plot)
+setwd("C:/Users/Gebruiker/OneDrive - Erasmus University Rotterdam/Seminar DSMA/Decision Trees and Ensembles")
+load("Churn.RData")
+str(data)
+summary(data)
+churn_rate <- mean(data$Churn == "Yes")
+
+set.seed(123)
+train_rows <- unlist(lapply(split(seq_len(nrow(data)), data$Churn), function(rows) sample(rows, round(0.7 * length(rows)))))
+train <- data[train_rows, ]
+test  <- data[-train_rows, ]
+
+full <- rpart(Churn ~ ., data = train, method = "class", control = rpart.control(cp = 0, xval = 10))
+rpart.plot(full)
+
+cp_table <- full$cptable
+row_min <- cp_table[which.min(cp_table[, "xerror"]), ]
+row_1se <- which(cp_table[, "xerror"] <= row_min["xerror"] + row_min["xstd"])[1]
+cp_1se <- cp_table[row_1se, "CP"]
+
+tree <- prune(full, cp = cp_1se)
+var_importance <- round(100 * tree$variable.importance / sum(tree$variable.importance), 1)
+
+test_pred <- predict(tree, test, type = "class")
+
+conf_matrix <- table(Predicted = test_pred, Actual = test$Churn)
+acc_test <- mean(test_pred == test$Churn)
+acc_baseline <- mean(test$Churn == "No")
+acc_train <- mean(predict(tree, train, type = "class") == train$Churn)
+acc_full <- mean(predict(full, test, type = "class") == test$Churn)
+conf_matrix; acc_test; acc_baseline; acc_train; acc_full
+
+precision <- conf_matrix["Yes", "Yes"] / sum(conf_matrix["Yes", ])
+recall <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"])
+precision; recall
+
+f1 <- 2*precision*recall / (precision+recall)
+f1
+
+rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd", fallen.leaves = TRUE, cex = 0.7)
+\end{lstlisting}
+
+\endgroup
