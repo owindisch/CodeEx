@@ -8,13 +8,13 @@ The data were provided by a telecom provider and contain 4,000 customers. For ea
 
 # 3. Methods
 
-To identify which characteristics are related to churn, a decision tree is used. It predicts a categorical outcome through a series of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups; the final groups (*leaves*) predict their most common class, giving easy-to-read if-then rules (James et al., 2013). Formally, each observation has a response $Y$ in one of $K$ classes (e.g. churn or not) and $p$ predictors $X_1, \dots, X_p$. The tree is built in five steps.
+To identify which characteristics are related to churn, a decision tree is used. Since churn is categorical, CART (Classification And Regression Trees; Breiman et al., 1984) builds a *classification tree*, which predicts the outcome through a series of yes/no questions, such as "is $X_1$ below 10?". Each question splits the observations into two more homogeneous groups; the final groups (*leaves*) predict their most common class, giving easy-to-read if-then rules (James et al., 2013). Formally, each observation has a response $Y$ in one of $K$ classes and $p$ predictors $X_1, \dots, X_p$. The tree is built in five steps.
 
-*First*, the tree is grown on a training set by *recursive binary splitting* (CART; Breiman et al., 1984). At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
+*First*, the tree is grown on a training set by *recursive binary splitting*. At each node $m$, every predictor $X_j$ and cut-point $s$ is tried, splitting the node into $\{X_j < s\}$ and $\{X_j \geq s\}$, and the split with the lowest weighted Gini impurity of the two new nodes is chosen, where
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
 and $\hat p_{mk}$ is the proportion of training observations in node $m$ that belong to class $k$. $G_m = 0$ for a pure node, and $\hat p_{mk}$ is the predicted probability of class $k$.
 
-*Second*, because a fully grown tree also fits noise (overfitting), it is *pruned* to the subtree $T$ that minimises
+*Second*, as a fully grown tree also fits noise (overfitting), it is *pruned* to the subtree $T$ that minimises
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
 where $R(T)$ is the share of misclassified training observations, $|T|$ the number of leaves of $T$, $R(T_0)$ the misclassification rate of the tree without splits, and $cp \geq 0$ the **complexity parameter**. A split is only kept if it lowers the relative error by at least $cp$, so a larger $cp$ gives a smaller tree.
 
@@ -30,11 +30,11 @@ The full tree has 94 splits; the cross-validated error is lowest (0.622) at 15 s
 
 The tree first splits on contract type, the most important variable (23.3% of importance), followed by *tenure* (17.6%) and *TotalCharges* (12.5%; Table A2). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates commitment and switching costs. **New fibre-optic customers** (month-to-month, under 16 months' tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the most expensive service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least \$95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
 
-On the 1,200 test customers, the tree predicts 76.5% correctly (training: 78.0%; unpruned tree: 74.0%), well above the 62.5% baseline. Of the flagged customers, 70.1% actually leave (precision), and 65.1% of all churners are found (recall), giving an F1 score of 0.68.
+On the 1,200 test customers, the tree is 76.5% accurate (training: 78.0%; unpruned tree: 74.0%), well above the 62.5% baseline. Its precision is 70.1% (flagged customers who actually leave), its recall 65.1% (churners found) and its F1 score 0.68.
 
 # 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: their contract, tenure, and internet service and its price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, review its most expensive fibre plans, and encourage new DSL customers to use extra services such as online backup. The analysis could be improved: a lower probability cut-off would find more of the 34.9% missed churners, a random forest would be more stable, and satisfaction or competitor-price data could reveal causes.
+Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, and internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, review its most expensive fibre plans, and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
 
 # References
 
