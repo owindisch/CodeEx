@@ -35,6 +35,13 @@ library(rpart); library(rpart.plot)
 setwd("C:/Users/Gebruiker/OneDrive - Erasmus University Rotterdam/Seminar DSMA/Decision Trees and Ensembles")
 load("Churn.RData")
 churn_rate <- mean(data$Churn == "Yes")  # this is the overall churn rate: 0.375 or 37.5%
+# Descriptive statistics
+str(data)                                                    # variable types: 3 numeric, 10 factors
+summary(data)                                                # numeric: min, quartiles, mean, max; factors: counts
+round(100 * prop.table(table(data$Churn)), 1)                # churn rate in %
+round(100 * prop.table(table(data$Contract)), 1)             # contract types in %
+round(100 * prop.table(table(data$Contract, data$Churn), 1), 1)        # churn rate per contract type
+round(100 * prop.table(table(data$InternetService, data$Churn), 1), 1) # churn rate per internet service
 ```
 ```{r data split, include=FALSE}
 set.seed(123)
@@ -68,9 +75,10 @@ acc_train <- mean(predict(tree, train, type = "class") == train$Churn)
 acc_full <- mean(predict(full, test, type = "class") == test$Churn)
 conf_matrix; acc_test; acc_baseline; acc_train; acc_full
 
-sensitivity <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"]) # churners detected
-specificity <- conf_matrix["No", "No"] / sum(conf_matrix[, "No"])   # stayers cleared
-sensitivity; specificity
+precision <- conf_matrix["Yes", "Yes"] / sum(conf_matrix["Yes", ]) # predicted churners that really churn
+recall    <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"]) # actual churners that are detected
+f1        <- 2 * precision * recall / (precision + recall)          # harmonic mean of precision and recall
+precision; recall; f1
 
 pct <- function(x) sprintf("%.1f%%", 100 * x) # for easier writing in text section, shows percentages directly
 
@@ -98,7 +106,7 @@ where $R(T)$ is the share of misclassified training observations, $|T|$ the numb
 
 *Third*, $cp$ is chosen by **$K_f$-fold cross-validation**: the training set is divided into $K_f$ parts, and the tree is fitted on $K_f - 1$ parts and tested on the remaining part, each part in turn. This gives a *cross-validated error* with its standard error; lower is better. The **one-standard-error rule** selects the smallest tree whose cross-validated error lies within one standard error of the minimum (Hastie et al., 2009).
 
-*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **sensitivity** (share of actual positives predicted positive) and **specificity** (share of actual negatives predicted negative). Higher is better, and the accuracy should clearly exceed the **baseline accuracy** of always predicting the most common class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction over all (also surrogate) splits; higher means more influential.
+*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **precision** $P$ (share of predicted positives that are actually positive), **recall** $R$ (share of actual positives that are detected) and **F1 score** $F_1 = 2PR/(P+R)$. Higher is better; accuracy should clearly exceed the **baseline accuracy** of always predicting the most common class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction (incl. surrogate splits); higher means more influential.
 
 # 4. Results
 
@@ -109,13 +117,13 @@ rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 ```
 
-The tree first splits on contract type, the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%) and *TotalCharges* (`r var_importance["TotalCharges"]`%; Table A2). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates commitment and switching costs. Among month-to-month customers, the type of internet matters most. **New fibre-optic customers** (month-to-month, less than 16 months with the company) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the most expensive service, and these customers have not yet built up loyalty. Longer-standing fibre customers churn less, unless they pay at least \$95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
+The tree first splits on contract type, the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%) and *TotalCharges* (`r var_importance["TotalCharges"]`%; Table A2). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates commitment and switching costs. **New fibre-optic customers** (month-to-month, under 16 months' tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the most expensive service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least \$95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
 
-On the `r format(nrow(test), big.mark = ",")` test customers, the tree predicts `r pct(acc_test)` correctly, well above the `r pct(acc_baseline)` baseline. The training accuracy is similar (`r pct(acc_train)`), and the unpruned tree reaches only `r pct(acc_full)`. The tree finds `r pct(sensitivity)` of the churners (sensitivity) and correctly identifies `r pct(specificity)` of the customers who stay (specificity).
+On the `r format(nrow(test), big.mark = ",")` test customers, the tree predicts `r pct(acc_test)` correctly (training: `r pct(acc_train)`; unpruned tree: `r pct(acc_full)`), well above the `r pct(acc_baseline)` baseline. Of the flagged customers, `r pct(precision)` actually leave (precision), and `r pct(recall)` of all churners are found (recall), giving an F1 score of `r sprintf("%.2f", f1)`.
 
 # 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: their contract, tenure, and internet service and its price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts for a one- or two-year contract, review its most expensive fibre plans, and encourage new DSL customers to use extra services such as online backup. The analysis could be improved: a lower probability cut-off would find more of the `r pct(1 - sensitivity)` missed churners, a random forest would be more stable, and data on satisfaction or competitor prices could reveal causes.
+Churn mainly depends on how strongly customers are tied to the provider: their contract, tenure, and internet service and its price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, review its most expensive fibre plans, and encourage new DSL customers to use extra services such as online backup. The analysis could be improved: a lower probability cut-off would find more of the `r pct(1 - recall)` missed churners, a random forest would be more stable, and satisfaction or competitor-price data could reveal causes.
 
 # References
 
@@ -192,6 +200,14 @@ setwd("C:/Users/Gebruiker/OneDrive - Erasmus University Rotterdam/Seminar DSMA/D
 load("Churn.RData")
 churn_rate <- mean(data$Churn == "Yes")  # this is the overall churn rate: 0.375 or 37.5%
 
+# Descriptive statistics
+str(data)                                                    # variable types: 3 numeric, 10 factors
+summary(data)                                                # numeric: min, quartiles, mean, max; factors: counts
+round(100 * prop.table(table(data$Churn)), 1)                # churn rate in %
+round(100 * prop.table(table(data$Contract)), 1)             # contract types in %
+round(100 * prop.table(table(data$Contract, data$Churn), 1), 1)        # churn rate per contract type
+round(100 * prop.table(table(data$InternetService, data$Churn), 1), 1) # churn rate per internet service
+
 # 3. Stratified 70/30 split: 70% of the churners and 70% of the non-churners go to the
 #    training set, so both sets keep the 37.5% churn rate; the seed makes it reproducible
 set.seed(123)
@@ -226,9 +242,10 @@ acc_train <- mean(predict(tree, train, type = "class") == train$Churn)
 acc_full <- mean(predict(full, test, type = "class") == test$Churn)
 conf_matrix; acc_test; acc_baseline; acc_train; acc_full
 
-sensitivity <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"]) # churners detected
-specificity <- conf_matrix["No", "No"] / sum(conf_matrix[, "No"])   # stayers cleared
-sensitivity; specificity
+precision <- conf_matrix["Yes", "Yes"] / sum(conf_matrix["Yes", ]) # predicted churners that really churn
+recall    <- conf_matrix["Yes", "Yes"] / sum(conf_matrix[, "Yes"]) # actual churners that are detected
+f1        <- 2 * precision * recall / (precision + recall)          # harmonic mean of precision and recall
+precision; recall; f1
 
 pct <- function(x) sprintf("%.1f%%", 100 * x) # for easier writing in text section, shows percentages directly
 
