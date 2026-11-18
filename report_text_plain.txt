@@ -28,9 +28,11 @@ The full tree has 94 splits; the cross-validated error is lowest (0.622) at 15 s
 
 [Figure 1: pruned tree (per node: predicted class, churn probability, share of training customers)]
 
-The tree first splits on contract type, the most important variable (23.3% of importance), followed by tenure (17.6%) and TotalCharges (12.5%; Appendix A, Table A1). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates switching costs. New fibre-optic customers (month-to-month, under 16 months’ tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the priciest service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least $95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
+Contract type is the first split in the tree and also the most important variable (23.3% of the total importance), followed by tenure (17.6%) and total charges (12.5%; Appendix A, Table A1). Customers with a one- or two-year contract make up 40% of all customers, and only 10% of them leave. A longer contract makes switching harder, so these customers are fairly safe.
 
-On the 1,200 test customers, the tree is 76.5% accurate (training: 78.0%; unpruned tree: 74.0%), well above the 62.5% baseline. Its precision is 70.1%, its recall 65.1% and its F1 score 0.68.
+The riskiest group is new fibre-optic customers: customers on a month-to-month contract who have been with the company for less than 16 months. They make up 18% of all customers, and 81% of them leave. Fibre is the most expensive service, and these customers have not yet had time to become loyal. Fibre customers who stay longer are less likely to leave, unless their monthly bill is $95.55 or more; then 62% still churn. For month-to-month customers with DSL or no internet, the length of the relationship matters most. After six months, only 28% leave, but 63% of newer customers without online backup do. Customers who use more services thus seem more attached to the provider.
+
+On the 1,200 test customers, the tree predicts churn correctly in 76.5% of cases. This is well above the 62.5% baseline and close to the 78.0% on the training data, so the tree does not overfit; the unpruned tree only reaches 74.0%. Of the customers the tree flags as churners, 70.1% actually leave (precision), and it finds 65.1% of all churners (recall), giving an F1 score of 0.68.
 
 5. Conclusions and Discussion
 
