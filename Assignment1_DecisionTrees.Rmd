@@ -91,7 +91,7 @@ Since acquiring a new customer costs more than retaining an existing one, and cu
 
 # 2. Data
 
-The data were provided by a telecom provider and contain `r format(nrow(data), big.mark = ",")` customers. For each customer, the data contain *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` customers or `r pct(churn_rate)` churned) and twelve predictors without missing values: the contract term (*Contract*; `r pct(mean(data$Contract == "Month-to-month"))` month-to-month), months with the company (*tenure*; median `r median(data$tenure)`), the monthly and total amount charged (*MonthlyCharges*, median \$`r round(median(data$MonthlyCharges))`; *TotalCharges*), whether the customer has a partner, phone service or multiple lines, the internet provider (*InternetService*: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: `r pct(mean(data$Churn[data$Contract == "Month-to-month"] == "Yes"))` of month-to-month customers churned against `r pct(mean(data$Churn[data$Contract == "Two year"] == "Yes"))` of two-year customers, and `r pct(mean(data$Churn[data$InternetService == "Fiber optic"] == "Yes"))` of fibre customers against `r pct(mean(data$Churn[data$InternetService == "DSL"] == "Yes"))` of DSL customers. The data are randomly split into a training set of `r format(nrow(train), big.mark = ",")` (70%) and a test set of `r format(nrow(test), big.mark = ",")` customers (30%), stratified by *Churn* so that both sets have exactly the same churn rate of `r pct(mean(test$Churn == "Yes"))`. Always predicting "no churn" therefore gives a baseline accuracy of `r pct(acc_baseline)`.
+The data were provided by a telecom provider and contain `r format(nrow(data), big.mark = ",")` customers. For each customer, the data contain *Churn* (yes/no; `r format(sum(data$Churn == "Yes"), big.mark = ",")` or `r pct(churn_rate)` churned) and twelve predictors without missing values: the contract term (*Contract*; `r pct(mean(data$Contract == "Month-to-month"))` month-to-month), months with the company (*tenure*; median `r median(data$tenure)`), the monthly and total amount charged (*MonthlyCharges*, median \$`r round(median(data$MonthlyCharges))`; *TotalCharges*), whether the customer has a partner, phone service or multiple lines, the internet provider (*InternetService*: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: `r pct(mean(data$Churn[data$Contract == "Month-to-month"] == "Yes"))` of month-to-month customers churned against `r pct(mean(data$Churn[data$Contract == "Two year"] == "Yes"))` of two-year customers, and `r pct(mean(data$Churn[data$InternetService == "Fiber optic"] == "Yes"))` of fibre customers against `r pct(mean(data$Churn[data$InternetService == "DSL"] == "Yes"))` of DSL customers. The data are randomly split into a training set of `r format(nrow(train), big.mark = ",")` (70%) and a test set of `r format(nrow(test), big.mark = ",")` customers (30%), stratified by *Churn* so both sets have the same churn rate of `r pct(mean(test$Churn == "Yes"))`. Always predicting "no churn" thus gives a baseline accuracy of `r pct(acc_baseline)`.
 
 # 3. Methods
 
@@ -107,24 +107,37 @@ where $R(T)$ is the share of misclassified training observations, $|T|$ the numb
 
 *Third*, $cp$ is chosen by **10-fold cross-validation** (James et al., 2013). The training set is divided into 10 parts and the tree is fitted on 9 parts. It is then tested on the remaining part, in turn. This gives a *cross-validated error* and its standard error; lower is better. The **one-standard-error rule** selects the smallest tree whose error is within one standard error of the minimum (Hastie et al., 2009).
 
-*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **precision** $P$ (share of predicted positives that are correct), **recall** $R$ (share of actual positives detected) and **F1 score** $F_1 = 2PR/(P+R)$ (Tan et al., 2014). Higher is better; accuracy should clearly exceed the **baseline accuracy** of always predicting the majority class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction (incl. surrogate splits); higher is more influential (de Oña et al., 2016).
+*Fourth*, the selected tree is evaluated on a separate test set by its **accuracy** (share of correct predictions), **precision** $P$ (share of predicted positives that are correct), **recall** $R$ (share of actual positives detected) and **F1 score** $F_1 = 2PR/(P+R)$ (Tan et al., 2014). Higher is better; accuracy should clearly exceed the **baseline accuracy** of always predicting the majority class. *Finally*, a predictor's **variable importance** is its share of the total Gini reduction; higher is more important (de Oña et al., 2016).
 
 # 4. Results
 
-The full tree has `r max(cp_table[, "nsplit"])` splits; the cross-validated error is lowest (`r sprintf("%.3f", row_min["xerror"])`) at `r row_min["nsplit"]` splits (Appendix A, Table A1). The one-standard-error rule selects $cp$ = `r sprintf("%.4f", cp_1se)`, a tree with `r cp_table[row_1se, "nsplit"]` splits and `r cp_table[row_1se, "nsplit"] + 1` leaves (Figure 1).
+**Table 1.** Cross-validation results per number of splits (errors relative to the tree without splits). The error is lowest at `r row_min["nsplit"]` splits; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (`r cp_table[row_1se, "nsplit"]` splits, `r cp_table[row_1se, "nsplit"] + 1` leaves; Figure 1).
 
-```{r tree plot, fig.width=8, fig.height=2.4, out.width="100%", fig.cap="Pruned tree (per node: predicted class, churn probability, share of training customers)."}
+```{r cp table, results="asis"}
+cp_rows <- cp_table[, "nsplit"] %in%
+  c(0, 1, 2, 4, cp_table[row_1se, "nsplit"], row_min["nsplit"], max(cp_table[, "nsplit"]))
+cp_summary <- data.frame(Splits = c("cp", "CV error", "CV std. error"),
+                         rbind(sprintf("%.4f", cp_table[cp_rows, "CP"]),
+                               sprintf("%.3f", cp_table[cp_rows, "xerror"]),
+                               sprintf("%.3f", cp_table[cp_rows, "xstd"])))
+names(cp_summary)[-1] <- cp_table[cp_rows, "nsplit"]   # one column per subtree size
+cat("\\begingroup\\small\n")
+cat(knitr::kable(cp_summary, format = "latex", booktabs = TRUE, row.names = FALSE))
+cat("\n\\endgroup\n")
+```
+
+```{r tree plot, fig.width=8, fig.height=1.9, out.width="100%", fig.cap="Pruned tree (per node: predicted class, churn probability, share of training customers)."}
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 ```
 
-The tree first splits on contract type, the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%) and *TotalCharges* (`r var_importance["TotalCharges"]`%; Table A2). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates commitment and switching costs. **New fibre-optic customers** (month-to-month, under 16 months' tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the most expensive service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least \$95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
+The tree first splits on contract type, the most important variable (`r var_importance["Contract"]`% of importance), followed by *tenure* (`r var_importance["tenure"]`%) and *TotalCharges* (`r var_importance["TotalCharges"]`%; Appendix A, Table A1). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates switching costs. **New fibre-optic customers** (month-to-month, under 16 months' tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the priciest service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least \$95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
 
-On the `r format(nrow(test), big.mark = ",")` test customers, the tree is `r pct(acc_test)` accurate (training: `r pct(acc_train)`; unpruned tree: `r pct(acc_full)`), well above the `r pct(acc_baseline)` baseline. Its precision is `r pct(precision)` (flagged customers who actually leave), its recall `r pct(recall)` (churners found) and its F1 score `r sprintf("%.2f", f1)`.
+On the `r format(nrow(test), big.mark = ",")` test customers, the tree is `r pct(acc_test)` accurate (training: `r pct(acc_train)`; unpruned tree: `r pct(acc_full)`), well above the `r pct(acc_baseline)` baseline. Its precision is `r pct(precision)`, its recall `r pct(recall)` and its F1 score `r sprintf("%.2f", f1)`.
 
 # 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, and internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the `r pct(1 - recall)` missed churners, and satisfaction or price data could reveal causes.
+Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers (e.g. discounts on longer contracts), and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the `r pct(1 - recall)` missed churners, and satisfaction or price data could reveal causes.
 
 # References
 
@@ -152,19 +165,7 @@ Yildirim, G., & Kübler, R. V. (2023). *Applied marketing analytics using R*. SA
 
 # Appendix A
 
-**Table A1.** Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects $cp$ = `r sprintf("%.4f", cp_1se)` (`r cp_table[row_1se, "nsplit"]` splits).
-
-```{r cp table}
-cp_rows <- cp_table[, "nsplit"] <= 25 | cp_table[, "nsplit"] == max(cp_table[, "nsplit"])
-cp_summary <- data.frame(cp = sprintf("%.4f", cp_table[cp_rows, "CP"]),
-                         Splits = cp_table[cp_rows, "nsplit"],
-                         Leaves = cp_table[cp_rows, "nsplit"] + 1,
-                         round(cp_table[cp_rows, c("rel error", "xerror", "xstd")], 3))
-names(cp_summary)[4:6] <- c("Training error", "CV error", "CV std. error")
-knitr::kable(cp_summary, format = "latex", booktabs = TRUE, row.names = FALSE)
-```
-
-**Table A2.** Relative variable importance in the pruned tree (percentage of total; includes surrogate splits).
+**Table A1.** Relative variable importance in the pruned tree (percentage of total; includes surrogate splits).
 
 ```{r importance table}
 knitr::kable(data.frame(Variable = names(var_importance),
@@ -256,14 +257,17 @@ pct <- function(x) sprintf("%.1f%%", 100 * x) # for easier writing in text secti
 rpart.plot(tree, type = 2, extra = 106, under = TRUE, box.palette = "GnRd",
            fallen.leaves = TRUE, cex = 0.7)
 
-# 9. Appendix A: cp table (Table A1) and variable importance (Table A2)
-cp_rows <- cp_table[, "nsplit"] <= 25 | cp_table[, "nsplit"] == max(cp_table[, "nsplit"])
-cp_summary <- data.frame(cp = sprintf("%.4f", cp_table[cp_rows, "CP"]),
-                         Splits = cp_table[cp_rows, "nsplit"],
-                         Leaves = cp_table[cp_rows, "nsplit"] + 1,
-                         round(cp_table[cp_rows, c("rel error", "xerror", "xstd")], 3))
-names(cp_summary)[4:6] <- c("Training error", "CV error", "CV std. error")
+# 9. Table 1: cross-validation results for selected subtrees
+cp_rows <- cp_table[, "nsplit"] %in%
+  c(0, 1, 2, 4, cp_table[row_1se, "nsplit"], row_min["nsplit"], max(cp_table[, "nsplit"]))
+cp_summary <- data.frame(Splits = c("cp", "CV error", "CV std. error"),
+                         rbind(sprintf("%.4f", cp_table[cp_rows, "CP"]),
+                               sprintf("%.3f", cp_table[cp_rows, "xerror"]),
+                               sprintf("%.3f", cp_table[cp_rows, "xstd"])))
+names(cp_summary)[-1] <- cp_table[cp_rows, "nsplit"]   # one column per subtree size
 knitr::kable(cp_summary, format = "latex", booktabs = TRUE, row.names = FALSE)
+
+# 10. Appendix A, Table A1: variable importance
 knitr::kable(data.frame(Variable = names(var_importance),
                         `Importance (%)` = var_importance, check.names = FALSE),
              format = "latex", booktabs = TRUE, row.names = FALSE)

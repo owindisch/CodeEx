@@ -4,7 +4,7 @@ Since acquiring a new customer costs more than retaining an existing one, and cu
 
 2. Data
 
-The data were provided by a telecom provider and contain 4,000 customers. For each customer, the data contain Churn (yes/no; 1,500 customers or 37.5% churned) and twelve predictors without missing values: the contract term (Contract; 59.7% month-to-month), months with the company (tenure; median 25.5), the monthly and total amount charged (MonthlyCharges, median $73; TotalCharges), whether the customer has a partner, phone service or multiple lines, the internet provider (InternetService: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: 56.0% of month-to-month customers churned against 4.5% of two-year customers, and 54.6% of fibre customers against 27.7% of DSL customers. The data are randomly split into a training set of 2,800 (70%) and a test set of 1,200 customers (30%), stratified by Churn so that both sets have exactly the same churn rate of 37.5%. Always predicting “no churn” therefore gives a baseline accuracy of 62.5%.
+The data were provided by a telecom provider and contain 4,000 customers. For each customer, the data contain Churn (yes/no; 1,500 or 37.5% churned) and twelve predictors without missing values: the contract term (Contract; 59.7% month-to-month), months with the company (tenure; median 25.5), the monthly and total amount charged (MonthlyCharges, median $73; TotalCharges), whether the customer has a partner, phone service or multiple lines, the internet provider (InternetService: DSL, fibre optic or none) and four add-ons (online security, online backup, device protection, tech support). Churn differs strongly between groups: 56.0% of month-to-month customers churned against 4.5% of two-year customers, and 54.6% of fibre customers against 27.7% of DSL customers. The data are randomly split into a training set of 2,800 (70%) and a test set of 1,200 customers (30%), stratified by Churn so both sets have the same churn rate of 37.5%. Always predicting “no churn” thus gives a baseline accuracy of 62.5%.
 
 3. Methods
 
@@ -20,21 +20,31 @@ where R(T) is the share of misclassified training observations, |T| the number o
 
 Third, cp is chosen by 10-fold cross-validation (James et al., 2013). The training set is divided into 10 parts and the tree is fitted on 9 parts. It is then tested on the remaining part, in turn. This gives a cross-validated error and its standard error; lower is better. The one-standard-error rule selects the smallest tree whose error is within one standard error of the minimum (Hastie et al., 2009).
 
-Fourth, the selected tree is evaluated on a separate test set by its accuracy (share of correct predictions), precision P (share of predicted positives that are correct), recall R (share of actual positives detected) and F1 score F₁ = 2PR/(P+R) (Tan et al., 2014). Higher is better; accuracy should clearly exceed the baseline accuracy of always predicting the majority class. Finally, a predictor’s variable importance is its share of the total Gini reduction (incl. surrogate splits); higher is more influential (de Oña et al., 2016).
+Fourth, the selected tree is evaluated on a separate test set by its accuracy (share of correct predictions), precision P (share of predicted positives that are correct), recall R (share of actual positives detected) and F1 score F₁ = 2PR/(P+R) (Tan et al., 2014). Higher is better; accuracy should clearly exceed the baseline accuracy of always predicting the majority class. Finally, a predictor’s variable importance is its share of the total Gini reduction; higher is more important (de Oña et al., 2016).
 
 4. Results
 
-The full tree has 94 splits; the cross-validated error is lowest (0.622) at 15 splits (Appendix A, Table A1). The one-standard-error rule selects cp = 0.0076, a tree with 8 splits and 9 leaves (Figure 1).
+Table 1. Cross-validation results per number of splits (errors relative to the tree without splits). The error is lowest at 15 splits; the 1-SE rule selects cp = 0.0076 (8 splits, 9 leaves; Figure 1).
+
+  ------------------------------------------------------------------------------
+  Splits          0        1        2        4        8        15       94
+  --------------- -------- -------- -------- -------- -------- -------- --------
+  cp              0.1714   0.1543   0.0205   0.0105   0.0076   0.0029   0.0000
+
+  CV error        1.000    0.913    0.674    0.646    0.637    0.622    0.720
+
+  CV std. error   0.024    0.024    0.022    0.022    0.021    0.021    0.022
+  ------------------------------------------------------------------------------
 
 [Figure 1: pruned tree (per node: predicted class, churn probability, share of training customers)]
 
-The tree first splits on contract type, the most important variable (23.3% of importance), followed by tenure (17.6%) and TotalCharges (12.5%; Table A2). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates commitment and switching costs. New fibre-optic customers (month-to-month, under 16 months’ tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the most expensive service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least $95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
+The tree first splits on contract type, the most important variable (23.3% of importance), followed by tenure (17.6%) and TotalCharges (12.5%; Appendix A, Table A1). Customers with a one- or two-year contract (40% of customers) rarely leave: only 10% churn. A long contract creates switching costs. New fibre-optic customers (month-to-month, under 16 months’ tenure) are by far the riskiest group: 18% of customers, of whom 81% churn. Fibre is the priciest service, and these customers lack loyalty yet. Longer-standing fibre customers churn less, unless they pay at least $95.55 per month (62% churn). For month-to-month DSL or no-internet customers, tenure is decisive: after six months only 28% churn, but 63% of new customers without online backup leave: those using more services seem more attached.
 
-On the 1,200 test customers, the tree is 76.5% accurate (training: 78.0%; unpruned tree: 74.0%), well above the 62.5% baseline. Its precision is 70.1% (flagged customers who actually leave), its recall 65.1% (churners found) and its F1 score 0.68.
+On the 1,200 test customers, the tree is 76.5% accurate (training: 78.0%; unpruned tree: 74.0%), well above the 62.5% baseline. Its precision is 70.1%, its recall 65.1% and its F1 score 0.68.
 
 5. Conclusions and Discussion
 
-Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, and internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers, e.g. with discounts on longer contracts, and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
+Churn mainly depends on how strongly customers are tied to the provider: contract, tenure, internet service and price. The provider should target month-to-month customers in their first year, especially fibre customers (e.g. discounts on longer contracts), and promote extra services such as online backup to new DSL customers. The analysis could be improved: a lower cut-off would catch more of the 34.9% missed churners, and satisfaction or price data could reveal causes.
 
 References
 
@@ -60,6 +70,4 @@ Yildirim, G., & Kübler, R. V. (2023). Applied marketing analytics using R. SAGE
 
 Appendix A
 
-Table A1. Cost-complexity table of the full tree (selected rows, 10-fold cross-validation). Errors are relative to the root-node error; the 1-SE rule selects cp = 0.0076 (8 splits).
-
-Table A2. Relative variable importance in the pruned tree (percentage of total; includes surrogate splits).
+Table A1. Relative variable importance in the pruned tree (percentage of total; includes surrogate splits).
