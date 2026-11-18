@@ -101,7 +101,7 @@ To identify which characteristics are related to churn, a decision tree is used.
 $$G_m = 1 - \sum_{k=1}^{K} \hat p_{mk}^2$$
 and $\hat p_{mk}$ is the share of training observations in node $m$ that belong to class $k$. A pure node has $G_m = 0$. In a leaf, $\hat p_{mk}$ is the predicted probability of class $k$.
 
-*Second*, as a fully grown tree also fits noise (overfitting; Tan et al., 2014), it is *pruned* (Therneau & Atkinson, 2023) to the subtree $T$ that minimises
+*Second*, because a fully grown tree also fits noise and this often leads to overfitting, it is *pruned* (Tan et al., 2014). In `rpart` (Therneau & Atkinson, 2023), the pruned tree is the subtree $T$ that minimises
 $$R_{cp}(T) = R(T) + cp \cdot |T| \cdot R(T_0),$$
 where $R(T)$ is the share of misclassified training observations, $|T|$ the number of leaves of $T$, $R(T_0)$ the misclassification rate of the tree without splits, and $cp \geq 0$ the **complexity parameter**. A split is only kept if it lowers the relative error by at least $cp$, so a larger $cp$ gives a smaller tree.
 
